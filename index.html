@@ -1,0 +1,1497 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestión - Bicicletas Eléctricas</title>
+<style>
+  :root {
+    --primary: #1a7f4b; --primary-dark: #145f38; --accent: #f0a500;
+    --danger: #c0392b; --bg: #f4f6f8; --card: #fff;
+    --border: #dde3ea; --text: #2c3e50; --muted: #7f8c8d; --success: #27ae60;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+
+  header { background: linear-gradient(135deg,var(--primary),var(--primary-dark)); color: white; padding: 14px 24px; display: flex; align-items: center; gap: 14px; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+  header h1 { font-size: 20px; font-weight: 700; }
+  header span { font-size: 13px; opacity: .85; }
+  .logo { font-size: 32px; }
+
+  .tabs { display: flex; background: white; border-bottom: 2px solid var(--border); padding: 0 16px; overflow-x: auto; }
+  .tab { padding: 12px 18px; cursor: pointer; font-weight: 600; font-size: 13px; border-bottom: 3px solid transparent; margin-bottom: -2px; color: var(--muted); transition: all .2s; white-space: nowrap; }
+  .tab:hover { color: var(--primary); }
+  .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+  .page { display: none; padding: 20px; }
+  .page.active { display: block; }
+
+  .card { background: var(--card); border-radius: 10px; border: 1px solid var(--border); padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+  .card h2 { font-size: 15px; font-weight: 700; color: var(--primary); margin-bottom: 16px; }
+
+  .form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px,1fr)); gap: 12px; }
+  .form-group { display: flex; flex-direction: column; gap: 4px; }
+  label { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  input, select { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 14px; color: var(--text); background: #fafbfc; transition: border .2s; font-family: inherit; width: 100%; }
+  input:focus, select:focus { outline: none; border-color: var(--primary); background: white; }
+  input[readonly] { background: #f0f0f0; color: var(--muted); }
+  input.info-field { background: #eaf4ef; color: var(--primary-dark); font-weight: 700; }
+
+  .pago-row { display: flex; gap: 6px; align-items: center; }
+  .pago-row select { flex: 1; }
+  .btn-edit { padding: 7px 9px; background: #eaf4ef; border: 1px solid #b2d8c3; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--primary); white-space: nowrap; }
+  .btn-edit:hover { background: #d4edda; }
+
+  .btn { padding: 9px 20px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px; transition: all .2s; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-primary { background: var(--primary); color: white; }
+  .btn-primary:hover { background: var(--primary-dark); }
+  .btn-danger { background: var(--danger); color: white; }
+  .btn-danger:hover { background: #a93226; }
+  .btn-warning { background: var(--accent); color: white; }
+  .btn-warning:hover { background: #d4920a; }
+  .btn-sm { padding: 4px 11px; font-size: 12px; }
+  .btn-row { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+
+  .table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead { background: var(--primary); color: white; }
+  th { padding: 10px 12px; text-align: left; font-weight: 600; white-space: nowrap; }
+  td { padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  tr:nth-child(even) { background: #f9fafb; }
+  tr:hover { background: #f0f7f3; }
+
+  .badge { display: inline-block; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+  .badge-green  { background: #d4edda; color: #155724; }
+  .badge-blue   { background: #d1ecf1; color: #0c5460; }
+  .badge-red    { background: #f8d7da; color: #721c24; }
+  .badge-yellow { background: #fff3cd; color: #856404; }
+  .badge-purple { background: #e2d9f3; color: #4a235a; }
+
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px,1fr)); gap: 14px; margin-bottom: 20px; }
+  .stat-card { background: var(--card); border-radius: 10px; padding: 16px; border-left: 4px solid var(--primary); box-shadow: 0 1px 4px rgba(0,0,0,.07); }
+  .stat-card.accent { border-left-color: var(--accent); }
+  .stat-card.danger { border-left-color: var(--danger); }
+  .stat-card.blue   { border-left-color: #3498db; }
+  .stat-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; }
+  .stat-value { font-size: 22px; font-weight: 800; color: var(--text); margin-top: 4px; }
+
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 1000; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: white; border-radius: 12px; padding: 24px; width: 92%; max-width: 560px; max-height: 92vh; overflow-y: auto; box-shadow: 0 8px 32px rgba(0,0,0,.2); }
+  .modal h3 { font-size: 16px; font-weight: 700; color: var(--primary); margin-bottom: 16px; }
+  .modal-close { float: right; background: none; border: none; font-size: 22px; cursor: pointer; color: var(--muted); line-height: 1; }
+
+  .alert { padding: 10px 14px; border-radius: 6px; margin-bottom: 12px; font-size: 13px; }
+  .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+  .alert-error   { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+
+  .search-bar { display: flex; gap: 10px; margin-bottom: 14px; align-items: center; flex-wrap: wrap; }
+  .search-bar input { flex: 1; min-width: 180px; }
+
+  .low-stock { background: #fff3cd !important; }
+  .sec-title { font-size: 12px; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: .5px; margin: 18px 0 10px; padding: 8px 12px; background: #eaf4ef; border-radius: 6px; border-left: 3px solid var(--primary); }
+  .saldo-pendiente { color: #c0392b; font-weight: 700; }
+  .saldo-pagado    { color: #27ae60; font-weight: 700; }
+
+  /* Tabla de pagos múltiples */
+  .pagos-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; }
+  .pagos-table th { background: #eaf4ef; color: var(--primary); padding: 6px 10px; text-align: left; font-weight: 700; border: 1px solid #b2d8c3; }
+  .pagos-table td { padding: 5px 8px; border: 1px solid var(--border); vertical-align: middle; }
+  .pagos-table input, .pagos-table select { padding: 5px 8px; font-size: 13px; border: 1px solid var(--border); border-radius: 4px; width: 100%; background: white; }
+  .pago-total-bar { display: flex; align-items: center; gap: 14px; margin-top: 8px; padding: 8px 12px; background: #f0f7f3; border-radius: 6px; font-size: 13px; }
+  .pago-total-bar strong { font-size: 15px; }
+
+  /* Detalle abonos en cartera */
+  .detalle-abonos { background: #f0f7f3; border-radius: 6px; padding: 8px; margin-top: 6px; }
+  .detalle-abonos table { font-size: 12px; }
+  .detalle-abonos thead { background: #b2d8c3; color: #1a4a30; }
+  .detalle-abonos th, .detalle-abonos td { padding: 4px 8px; }
+
+  /* Editor listas */
+  .lista-edit { list-style: none; margin-bottom: 12px; }
+  .lista-edit li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .lista-edit li span { flex: 1; }
+  .add-row { display: flex; gap: 8px; margin-top: 6px; }
+  .add-row input { flex: 1; }
+
+  @media(max-width:640px) { .form-grid { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">⚡</div>
+  <div style="flex:1"><h1>Bicicletas Eléctricas</h1><span>Sistema de Gestión Comercial</span></div>
+  <button onclick="borrarTodosLosDatos()" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.4);color:white;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600">🗑️ Borrar todos los datos</button>
+</header>
+
+<div class="tabs">
+  <div class="tab active"  onclick="showPage('inventario',this)">📦 Inventario</div>
+  <div class="tab" onclick="showPage('productos',this)">➕ Entrada Productos</div>
+  <div class="tab" onclick="showPage('ventas',this)">🛒 Ventas</div>
+  <div class="tab" onclick="showPage('cartera',this)">💳 Cartera</div>
+  <div class="tab" onclick="showPage('gastos',this)">💸 Gastos</div>
+  <div class="tab" onclick="showPage('reportes',this)">📊 Reportes</div>
+</div>
+
+<!-- ===== INVENTARIO ===== -->
+<div id="page-inventario" class="page active">
+  <div class="stats-grid" id="inv-stats"></div>
+  <div class="card">
+    <h2>📦 Inventario Actual</h2>
+    <div class="search-bar">
+      <input type="text" id="inv-search" placeholder="Buscar por SKU o nombre..." oninput="renderInventario()">
+      <button class="btn btn-primary btn-sm" onclick="exportarInventario()">⬇ Exportar CSV</button>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>SKU</th><th>Producto</th><th>Categoría</th><th>Stock</th><th>P. Compra</th><th>Total Inv.</th><th>P. Venta Sug.</th><th>Estado</th></tr></thead>
+      <tbody id="inv-body"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- ===== ENTRADA PRODUCTOS ===== -->
+<div id="page-productos" class="page">
+  <div class="card">
+    <h2>➕ Registro de Entrada de Productos</h2>
+    <div id="prod-alert"></div>
+    <div class="form-grid">
+      <div class="form-group"><label>Fecha *</label><input type="date" id="p-fecha"></div>
+      <div class="form-group"><label>Proveedor *</label><input type="text" id="p-proveedor" placeholder="Nombre del proveedor"></div>
+      <div class="form-group"><label>N° Factura</label><input type="text" id="p-factura" placeholder="FAC-001"></div>
+      <div class="form-group"><label>SKU *</label><input type="text" id="p-sku" placeholder="BIC-001" style="text-transform:uppercase"></div>
+      <div class="form-group"><label>Nombre del Producto *</label><input type="text" id="p-nombre" placeholder="Nombre descriptivo"></div>
+      <div class="form-group"><label>Categoría</label>
+        <select id="p-categoria">
+          <option>Bicicleta Eléctrica</option><option>Moto Eléctrica</option>
+          <option>Cargador</option><option>Espejo</option>
+          <option>Accesorio</option><option>Repuesto</option><option>Otro</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Cantidad *</label><input type="number" id="p-cantidad" min="1" value="1" oninput="calcTotalProd()"></div>
+      <div class="form-group"><label>Valor Unitario ($) *</label><input type="number" id="p-valor" min="0" placeholder="0" oninput="calcTotalProd()"></div>
+      <div class="form-group"><label>Total ($)</label><input type="number" id="p-total" readonly class="info-field"></div>
+      <div class="form-group"><label>Precio Venta Sugerido ($)</label><input type="number" id="p-pventa" min="0" placeholder="0"></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="guardarProducto()">💾 Guardar Entrada</button>
+      <button class="btn btn-warning" onclick="limpiarProd()">🔄 Limpiar</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>📋 Historial de Entradas</h2>
+    <div class="search-bar"><input type="text" id="hist-search" placeholder="Buscar..." oninput="renderHistorial()"></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Fecha</th><th>Proveedor</th><th>Factura</th><th>SKU</th><th>Producto</th><th>Cant.</th><th>V. Unit.</th><th>Total</th><th></th></tr></thead>
+      <tbody id="hist-body"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- ===== VENTAS ===== -->
+<div id="page-ventas" class="page">
+  <div class="card">
+    <h2>🛒 Registro de Venta</h2>
+    <div id="venta-alert"></div>
+
+    <div class="sec-title">👤 Datos del Cliente</div>
+    <div class="form-grid">
+      <div class="form-group"><label>Nombre *</label><input type="text" id="v-nombre" placeholder="Nombre completo"></div>
+      <div class="form-group"><label>Dirección</label><input type="text" id="v-direccion" placeholder="Dirección"></div>
+      <div class="form-group"><label>Ciudad</label><input type="text" id="v-ciudad" placeholder="Ciudad"></div>
+      <div class="form-group"><label>Teléfono</label><input type="tel" id="v-telefono" placeholder="Teléfono"></div>
+      <div class="form-group"><label>Correo</label><input type="email" id="v-correo" placeholder="correo@ejemplo.com"></div>
+      <div class="form-group"><label>Fecha *</label><input type="date" id="v-fecha"></div>
+      <div class="form-group">
+        <label>Canal de Venta</label>
+        <div class="pago-row">
+          <select id="v-canal"></select>
+          <button class="btn-edit" onclick="abrirEditor('canal')" title="Editar canales">✏️</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec-title">📦 Producto</div>
+    <div class="form-grid">
+      <div class="form-group"><label>SKU *</label><input type="text" id="v-sku" placeholder="Código SKU" oninput="buscarSKU()" style="text-transform:uppercase"></div>
+      <div class="form-group"><label>Producto</label><input type="text" id="v-producto" readonly placeholder="(automático)"></div>
+      <div class="form-group"><label>Stock Disponible</label><input type="number" id="v-stock" readonly placeholder="(auto)"></div>
+      <div class="form-group"><label>Cantidad *</label><input type="number" id="v-cantidad" min="1" value="1" oninput="calcVenta()"></div>
+      <div class="form-group">
+        <label>Valor Unitario (IVA incluido) *</label>
+        <input type="number" id="v-valor" min="0" placeholder="Precio con IVA incluido" oninput="calcVenta()">
+      </div>
+      <div class="form-group">
+        <label>% IVA incluido</label>
+        <select id="v-iva-pct" onchange="calcVenta()">
+          <option value="0">Sin IVA (0%)</option>
+          <option value="5">IVA 5%</option>
+          <option value="19">IVA 19%</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Valor IVA (incluido en precio)</label>
+        <input type="number" id="v-iva-val" readonly class="info-field" placeholder="Informativo">
+      </div>
+      <div class="form-group">
+        <label>Total Venta ($)</label>
+        <input type="number" id="v-total" readonly class="info-field">
+      </div>
+    </div>
+
+    <div class="sec-title">💳 Pago</div>
+    <div class="form-grid" style="margin-bottom:12px">
+      <div class="form-group">
+        <label>Tipo de Venta</label>
+        <select id="v-tipo" onchange="toggleCredito()">
+          <option value="Contado">Contado</option>
+          <option value="Crédito">Crédito</option>
+        </select>
+      </div>
+      <div class="form-group"><label>N° Factura Venta</label><input type="text" id="v-factura" placeholder="FV-001"></div>
+      <div class="form-group"><label>Observaciones</label><input type="text" id="v-obs" placeholder="Notas adicionales"></div>
+    </div>
+
+    <!-- Tabla de pagos múltiples -->
+    <div id="pagos-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <label style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase">Pagos recibidos <span id="lbl-pagos-tipo">(Contado)</span></label>
+        <button class="btn btn-primary btn-sm" onclick="agregarFilaPago()">+ Agregar pago</button>
+      </div>
+      <table class="pagos-table">
+        <thead><tr><th style="width:50%">Forma de Pago</th><th style="width:40%">Valor ($)</th><th style="width:10%"></th></tr></thead>
+        <tbody id="pagos-body"></tbody>
+      </table>
+      <div class="pago-total-bar">
+        <span>Total venta: <strong id="lbl-total-venta">$0</strong></span>
+        <span>Total pagado: <strong id="lbl-total-pagado" style="color:var(--primary)">$0</strong></span>
+        <span id="lbl-diferencia" style="color:var(--danger);font-weight:700"></span>
+      </div>
+    </div>
+
+    <!-- Campo saldo (solo crédito) -->
+    <div id="saldo-group" style="display:none;margin-top:10px" class="form-grid">
+      <div class="form-group">
+        <label>Saldo Pendiente ($)</label>
+        <input type="number" id="v-saldo" readonly class="info-field">
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="guardarVenta()">💾 Registrar Venta</button>
+      <button class="btn btn-warning" onclick="limpiarVenta()">🔄 Limpiar</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>📋 Historial de Ventas</h2>
+    <div class="search-bar" style="flex-wrap:wrap;gap:8px">
+      <input type="text" id="ventas-search" placeholder="🔍 Buscar por nombre, SKU, teléfono..." style="min-width:220px">
+      <input type="date" id="ventas-fecha-desde" title="Desde">
+      <input type="date" id="ventas-fecha-hasta" title="Hasta">
+      <select id="ventas-filter">
+        <option value="">Todos los tipos</option><option value="Contado">Contado</option><option value="Crédito">Crédito</option>
+      </select>
+      <select id="ventas-canal-filter">
+        <option value="">Todos los canales</option>
+      </select>
+      <button class="btn btn-primary btn-sm" onclick="renderVentas()">🔍 Buscar</button>
+      <button class="btn btn-warning btn-sm" onclick="limpiarFiltrosVentas()">✕ Limpiar</button>
+    </div>
+    <div id="ventas-resumen" style="display:none;padding:8px 12px;background:#eaf4ef;border-radius:6px;font-size:13px;margin-bottom:10px"></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Fecha</th><th>Canal</th><th>Cliente</th><th>SKU</th><th>Producto</th><th>Cant.</th><th>Total</th><th>Pagado</th><th>Saldo</th><th>Tipo</th><th>Pagos</th><th>Acciones</th></tr></thead>
+      <tbody id="ventas-body"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- ===== CARTERA ===== -->
+<div id="page-cartera" class="page">
+  <div class="stats-grid" id="cartera-stats"></div>
+  <div class="card">
+    <h2>💳 Estado de Cuenta — Clientes a Crédito</h2>
+    <div class="search-bar"><input type="text" id="cartera-search" placeholder="Buscar cliente..." oninput="renderCartera()"></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Fecha</th><th>Cliente</th><th>Teléfono</th><th>Producto</th><th>Total</th><th>Abonado</th><th>Saldo</th><th>Estado</th><th>Acciones / Pagos</th></tr></thead>
+      <tbody id="cartera-body"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- ===== GASTOS ===== -->
+<div id="page-gastos" class="page">
+  <div class="card">
+    <h2>💸 Registro de Gastos</h2>
+    <div id="gasto-alert"></div>
+    <div class="form-grid">
+      <div class="form-group"><label>Fecha *</label><input type="date" id="g-fecha"></div>
+      <div class="form-group"><label>Concepto *</label><input type="text" id="g-concepto" placeholder="Descripción del gasto"></div>
+      <div class="form-group"><label>Categoría</label>
+        <select id="g-categoria">
+          <option>Arriendo</option><option>Servicios públicos</option><option>Transporte</option>
+          <option>Publicidad</option><option>Nómina</option><option>Mantenimiento</option><option>Otro</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Valor ($) *</label><input type="number" id="g-valor" min="0" placeholder="0"></div>
+      <div class="form-group">
+        <label>Forma de Pago</label>
+        <div class="pago-row">
+          <select id="g-formapago"></select>
+          <button class="btn-edit" onclick="abrirEditor('metodos')" title="Editar métodos">✏️</button>
+        </div>
+      </div>
+      <div class="form-group"><label>Comprobante</label><input type="text" id="g-comprobante" placeholder="N° recibo o referencia"></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="guardarGasto()">💾 Guardar Gasto</button>
+      <button class="btn btn-warning" onclick="limpiarGasto()">🔄 Limpiar</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>📋 Historial de Gastos</h2>
+    <div class="search-bar">
+      <input type="text" id="gastos-search" placeholder="Buscar..." oninput="renderGastos()">
+      <input type="month" id="gastos-mes" onchange="renderGastos()">
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Forma Pago</th><th>Comprobante</th><th>Valor</th><th></th></tr></thead>
+      <tbody id="gastos-body"></tbody>
+    </table></div>
+    <div style="margin-top:12px;text-align:right;font-weight:700;font-size:15px;color:var(--danger)">Total: <span id="gastos-total">$0</span></div>
+  </div>
+</div>
+
+<!-- ===== REPORTES ===== -->
+<div id="page-reportes" class="page">
+  <div class="stats-grid" id="rep-stats"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+    <div class="card"><h2>📈 Ventas por Mes</h2>
+      <div class="table-wrap"><table><thead><tr><th>Mes</th><th>N°</th><th>Total</th></tr></thead><tbody id="rep-ventas-mes"></tbody></table></div>
+    </div>
+    <div class="card"><h2>💸 Gastos por Categoría</h2>
+      <div class="table-wrap"><table><thead><tr><th>Categoría</th><th>Total</th></tr></thead><tbody id="rep-gastos-cat"></tbody></table></div>
+    </div>
+    <div class="card"><h2>🏆 Productos más Vendidos</h2>
+      <div class="table-wrap"><table><thead><tr><th>SKU</th><th>Producto</th><th>Cant.</th><th>Total</th></tr></thead><tbody id="rep-top"></tbody></table></div>
+    </div>
+    <div class="card"><h2>📡 Ventas por Canal</h2>
+      <div class="table-wrap"><table><thead><tr><th>Canal</th><th>N°</th><th>Total</th></tr></thead><tbody id="rep-canal"></tbody></table></div>
+    </div>
+    <!-- EFECTIVO separado -->
+    <div class="card" style="grid-column:1/-1;border-left:5px solid var(--success)">
+      <h2>💵 Caja — Disponible en Efectivo</h2>
+      <div id="caja-efectivo-stats" style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:16px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div>
+          <div style="font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;margin-bottom:8px">📥 Entradas en Efectivo</div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Fecha</th><th>Concepto</th><th>Valor</th></tr></thead>
+            <tbody id="caja-efectivo-entradas"></tbody>
+          </table></div>
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:700;color:var(--danger);text-transform:uppercase;margin-bottom:8px">📤 Salidas en Efectivo (Gastos)</div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Fecha</th><th>Concepto</th><th>Valor</th></tr></thead>
+            <tbody id="caja-efectivo-salidas"></tbody>
+          </table></div>
+        </div>
+      </div>
+    </div>
+    <!-- OTROS MÉTODOS -->
+    <div class="card" style="grid-column:1/-1">
+      <h2>💳 Disponible por Otros Medios de Pago</h2>
+      <div id="caja-resumen-tarjetas" style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:20px"></div>
+      <div id="caja-detalle"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Abono -->
+<div class="modal-overlay" id="modal-abono">
+  <div class="modal">
+    <button class="modal-close" onclick="cerrarModalAbono()">&#x2715;</button>
+    <h3>💳 Registrar Abono</h3>
+    <div id="abono-info" style="margin-bottom:14px;padding:10px;background:#f0f7f3;border-radius:6px;font-size:13px;"></div>
+    <div class="form-grid" style="grid-template-columns:1fr 1fr">
+      <div class="form-group"><label>Valor del Abono ($) *</label><input type="number" id="abono-valor" min="1" placeholder="0"></div>
+      <div class="form-group"><label>Fecha *</label><input type="date" id="abono-fecha"></div>
+      <div class="form-group" style="grid-column:1/-1">
+        <label>Forma de Pago</label>
+        <div class="pago-row">
+          <select id="abono-forma"></select>
+          <button class="btn-edit" onclick="abrirEditor('metodos')" title="Editar métodos">✏️</button>
+        </div>
+      </div>
+    </div>
+    <div id="abono-alert" style="margin-top:10px"></div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="confirmarAbono()">💾 Registrar Abono</button>
+      <button class="btn btn-warning" onclick="cerrarModalAbono()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Editar Venta -->
+<div class="modal-overlay" id="modal-editar-venta">
+  <div class="modal" style="max-width:700px">
+    <button class="modal-close" onclick="cerrarEditorVenta()">&#x2715;</button>
+    <h3>✏️ Editar Venta</h3>
+    <div id="edit-venta-alert"></div>
+
+    <p class="sec-title" style="margin-top:0">👤 Cliente</p>
+    <div class="form-grid">
+      <div class="form-group"><label>Nombre *</label><input type="text" id="ev-nombre"></div>
+      <div class="form-group"><label>Teléfono</label><input type="text" id="ev-telefono"></div>
+      <div class="form-group"><label>Dirección</label><input type="text" id="ev-direccion"></div>
+      <div class="form-group"><label>Ciudad</label><input type="text" id="ev-ciudad"></div>
+      <div class="form-group"><label>Correo</label><input type="email" id="ev-correo"></div>
+      <div class="form-group"><label>Fecha *</label><input type="date" id="ev-fecha"></div>
+      <div class="form-group"><label>Canal</label><select id="ev-canal"></select></div>
+    </div>
+
+    <p class="sec-title">📦 Producto</p>
+    <div class="form-grid">
+      <div class="form-group"><label>SKU *</label><input type="text" id="ev-sku" style="text-transform:uppercase" oninput="ev_buscarSKU()"></div>
+      <div class="form-group"><label>Producto</label><input type="text" id="ev-producto" readonly></div>
+      <div class="form-group"><label>Stock actual</label><input type="number" id="ev-stock" readonly></div>
+      <div class="form-group"><label>Cantidad *</label><input type="number" id="ev-cantidad" min="1" oninput="ev_calcular()"></div>
+      <div class="form-group"><label>Valor unitario (IVA incluido) *</label><input type="number" id="ev-valor" oninput="ev_calcular()"></div>
+      <div class="form-group"><label>% IVA incluido</label>
+        <select id="ev-iva-pct" onchange="ev_calcular()">
+          <option value="0">Sin IVA (0%)</option>
+          <option value="5">IVA 5%</option>
+          <option value="19">IVA 19%</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Valor IVA (info)</label><input type="number" id="ev-iva-val" readonly class="info-field"></div>
+      <div class="form-group"><label>Total ($)</label><input type="number" id="ev-total" readonly class="info-field"></div>
+    </div>
+
+    <p class="sec-title">💳 Pago</p>
+    <div class="form-grid" style="margin-bottom:12px">
+      <div class="form-group"><label>Tipo</label>
+        <select id="ev-tipo" onchange="ev_toggleCredito()">
+          <option value="Contado">Contado</option>
+          <option value="Crédito">Crédito</option>
+        </select>
+      </div>
+      <div class="form-group"><label>N° Factura</label><input type="text" id="ev-factura"></div>
+      <div class="form-group"><label>Observaciones</label><input type="text" id="ev-obs"></div>
+    </div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <label style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase">Pagos <span id="ev-lbl-tipo"></span></label>
+      <button class="btn btn-primary btn-sm" onclick="ev_agregarPago()">+ Agregar pago</button>
+    </div>
+    <table class="pagos-table">
+      <thead><tr><th style="width:50%">Forma de Pago</th><th style="width:40%">Valor ($)</th><th style="width:10%"></th></tr></thead>
+      <tbody id="ev-pagos-body"></tbody>
+    </table>
+    <div class="pago-total-bar">
+      <span>Total: <strong id="ev-lbl-total">$0</strong></span>
+      <span>Pagado: <strong id="ev-lbl-pagado" style="color:var(--primary)">$0</strong></span>
+      <span id="ev-lbl-dif" style="font-weight:700"></span>
+    </div>
+    <div id="ev-saldo-group" style="display:none;margin-top:10px">
+      <div class="form-group"><label>Saldo Pendiente ($)</label><input type="number" id="ev-saldo" readonly class="info-field"></div>
+    </div>
+
+    <div class="btn-row" style="margin-top:18px">
+      <button class="btn btn-primary" onclick="guardarEdicionVenta()">💾 Guardar Cambios</button>
+      <button class="btn btn-warning" onclick="cerrarEditorVenta()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Editor de listas -->
+<div class="modal-overlay" id="modal-editor">
+  <div class="modal">
+    <button class="modal-close" onclick="cerrarEditor()">&#x2715;</button>
+    <h3 id="editor-titulo">Editar lista</h3>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:14px" id="editor-desc"></p>
+    <ul class="lista-edit" id="editor-list"></ul>
+    <div class="add-row">
+      <input type="text" id="nuevo-item" placeholder="Nuevo valor..." onkeydown="if(event.key==='Enter')agregarItem()">
+      <button class="btn btn-primary" onclick="agregarItem()">+ Agregar</button>
+    </div>
+    <div class="btn-row" style="margin-top:18px">
+      <button class="btn btn-primary" onclick="cerrarEditor()">✅ Listo</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ================================================================
+// STORAGE
+// ================================================================
+var _cache = {};
+var DB = {
+  get: function(k) { return _cache[k] !== undefined ? JSON.parse(JSON.stringify(_cache[k])) : []; },
+  set: function(k,v) {
+    _cache[k] = v;
+    var payload = {}; payload[k] = v;
+    fetch('/api/save', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+  }
+};
+var KEYS = { productos:'bec_prod', ventas:'bec_ventas', gastos:'bec_gastos', inventario:'bec_inv', metodos:'bec_metodos', canales:'bec_canales' };
+
+var DEF_METODOS = ['Efectivo','Nequi','Bancolombia','Banco de Bogotá','Addi','Tarjeta Débito','Tarjeta Crédito','Transferencia'];
+var DEF_CANALES = ['Almacén','Facebook','Instagram','WhatsApp','Página Web','Referido'];
+
+function getLista(key, def) { return _cache[key] !== undefined ? _cache[key] : def.slice(); }
+function setLista(key, arr) {
+  _cache[key] = arr;
+  var payload = {}; payload[key] = arr;
+  fetch('/api/save', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+}
+
+function getInventario() { return _cache[KEYS.inventario] || {}; }
+function setInventario(inv) {
+  _cache[KEYS.inventario] = inv;
+  var payload = {}; payload[KEYS.inventario] = inv;
+  fetch('/api/save', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+}
+
+// ================================================================
+// UTILS
+// ================================================================
+function el(id)      { return document.getElementById(id); }
+function val(id)     { return el(id).value; }
+function setVal(id,v){ el(id).value = v; }
+function fmt(n)      { return '$' + Number(n||0).toLocaleString('es-CO'); }
+function today()     { return new Date().toISOString().split('T')[0]; }
+
+function showAlert(id, msg, type) {
+  type = type || 'success';
+  el(id).innerHTML = '<div class="alert alert-'+type+'">'+msg+'</div>';
+  setTimeout(function(){ if(el(id)) el(id).innerHTML=''; }, 5000);
+}
+
+function showPage(page, tab) {
+  document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
+  document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+  el('page-'+page).classList.add('active');
+  tab.classList.add('active');
+  if (page==='inventario') { renderInventario(); renderInvStats(); }
+  if (page==='ventas')     { renderVentas(); }
+  if (page==='cartera')    { renderCartera(); renderCarteraStats(); }
+  if (page==='gastos')     { renderGastos(); }
+  if (page==='reportes')   { renderReportes(); }
+  if (page==='productos')  { renderHistorial(); }
+}
+
+// ================================================================
+// DROPDOWNS
+// ================================================================
+function llenarSelect(id, items, valorActual) {
+  var s = el(id); if (!s) return;
+  var prev = valorActual !== undefined ? valorActual : s.value;
+  s.innerHTML = '';
+  items.forEach(function(m) {
+    var o = document.createElement('option'); o.value = m; o.textContent = m; s.appendChild(o);
+  });
+  if (prev) s.value = prev;
+}
+
+function refrescarDropdowns() {
+  var metodos = getLista(KEYS.metodos, DEF_METODOS);
+  var canales  = getLista(KEYS.canales, DEF_CANALES);
+  llenarSelect('g-formapago', metodos);
+  llenarSelect('abono-forma', metodos);
+  llenarSelect('v-canal', canales);
+  // también actualizar selects de filas de pagos
+  document.querySelectorAll('.sel-metodo').forEach(function(s) {
+    var prev = s.value;
+    s.innerHTML = '';
+    metodos.forEach(function(m){ var o=document.createElement('option'); o.value=m; o.textContent=m; s.appendChild(o); });
+    if (prev) s.value = prev;
+  });
+}
+
+// ================================================================
+// EDITOR DE LISTAS
+// ================================================================
+var editorKey = null;
+var editorDef = null;
+
+function abrirEditor(tipo) {
+  if (tipo === 'metodos') {
+    editorKey = KEYS.metodos; editorDef = DEF_METODOS;
+    el('editor-titulo').textContent = '✏️ Métodos de Pago';
+    el('editor-desc').textContent = 'Disponibles en Ventas, Gastos y Abonos.';
+  } else {
+    editorKey = KEYS.canales; editorDef = DEF_CANALES;
+    el('editor-titulo').textContent = '✏️ Canales de Venta';
+    el('editor-desc').textContent = 'Canal por donde llegó la venta.';
+  }
+  renderEditorList();
+  el('modal-editor').classList.add('open');
+}
+
+function cerrarEditor() {
+  el('modal-editor').classList.remove('open');
+  refrescarDropdowns();
+}
+
+function renderEditorList() {
+  var items = getLista(editorKey, editorDef);
+  var html = '';
+  items.forEach(function(m, i) {
+    html += '<li><span>'+m+'</span><button class="btn btn-danger btn-sm" onclick="eliminarItem('+i+')">✕ Eliminar</button></li>';
+  });
+  el('editor-list').innerHTML = html || '<li style="color:var(--muted);font-size:13px">Sin elementos</li>';
+}
+
+function agregarItem() {
+  var v = val('nuevo-item').trim(); if (!v) return;
+  var items = getLista(editorKey, editorDef);
+  if (items.indexOf(v) > -1) { alert('Ya existe ese valor'); return; }
+  items.push(v); setLista(editorKey, items);
+  setVal('nuevo-item',''); renderEditorList();
+}
+
+function eliminarItem(i) {
+  var items = getLista(editorKey, editorDef);
+  if (items.length <= 1) { alert('Debe quedar al menos un elemento'); return; }
+  items.splice(i, 1); setLista(editorKey, items); renderEditorList();
+}
+
+// ================================================================
+// MÓDULO PRODUCTOS
+// ================================================================
+function calcTotalProd() {
+  var q = parseFloat(val('p-cantidad'))||0, v = parseFloat(val('p-valor'))||0;
+  setVal('p-total', (q*v).toFixed(0));
+}
+
+function guardarProducto() {
+  var fecha=val('p-fecha'), prov=val('p-proveedor'), sku=val('p-sku').toUpperCase().trim(),
+      nombre=val('p-nombre').trim(), cant=parseInt(val('p-cantidad')), valor=parseFloat(val('p-valor'));
+  if (!fecha||!prov||!sku||!nombre||!cant||!valor) { showAlert('prod-alert','⚠ Complete los campos obligatorios (*)','error'); return; }
+  var e = { id:Date.now(), fecha:fecha, proveedor:prov, factura:val('p-factura'), sku:sku,
+    nombre:nombre, categoria:val('p-categoria'), cantidad:cant, valor:valor, total:cant*valor,
+    pventa:parseFloat(val('p-pventa'))||0 };
+  var prods = DB.get(KEYS.productos); prods.push(e); DB.set(KEYS.productos, prods);
+  var inv = getInventario();
+  if (!inv[sku]) inv[sku]={ nombre:nombre, categoria:e.categoria, stock:0, precioCompra:0, precioVenta:0 };
+  inv[sku].stock += cant; inv[sku].precioCompra = valor; inv[sku].nombre = nombre; inv[sku].categoria = e.categoria;
+  if (e.pventa) inv[sku].precioVenta = e.pventa;
+  setInventario(inv);
+  showAlert('prod-alert','✅ Producto "'+nombre+'" ingresado. Stock: '+inv[sku].stock);
+  limpiarProd(); renderHistorial();
+}
+
+function limpiarProd() {
+  ['p-proveedor','p-factura','p-sku','p-nombre','p-valor','p-total','p-pventa'].forEach(function(id){ setVal(id,''); });
+  setVal('p-cantidad',1); setVal('p-fecha',today());
+}
+
+function renderHistorial() {
+  var prods = DB.get(KEYS.productos);
+  var q = val('hist-search').toLowerCase();
+  var list = prods.filter(function(p){ return !q||p.sku.toLowerCase().indexOf(q)>-1||p.nombre.toLowerCase().indexOf(q)>-1||p.proveedor.toLowerCase().indexOf(q)>-1; }).reverse();
+  if (!list.length) { el('hist-body').innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--muted)">Sin registros</td></tr>'; return; }
+  var h=''; list.forEach(function(p){
+    h+='<tr><td>'+p.fecha+'</td><td>'+p.proveedor+'</td><td>'+(p.factura||'-')+'</td>';
+    h+='<td><strong>'+p.sku+'</strong></td><td>'+p.nombre+'</td>';
+    h+='<td>'+p.cantidad+'</td><td>'+fmt(p.valor)+'</td><td>'+fmt(p.total)+'</td>';
+    h+='<td><button class="btn btn-danger btn-sm" onclick="eliminarProducto('+p.id+')">✕</button></td></tr>';
+  });
+  el('hist-body').innerHTML = h;
+}
+
+function eliminarProducto(id) {
+  if (!confirm('¿Eliminar entrada? Se revertirá el stock.')) return;
+  var prods = DB.get(KEYS.productos), p=null; prods.forEach(function(x){ if(x.id===id) p=x; });
+  if (p) { var inv=getInventario(); if(inv[p.sku]){ inv[p.sku].stock-=p.cantidad; if(inv[p.sku].stock<0) inv[p.sku].stock=0; } setInventario(inv); }
+  DB.set(KEYS.productos, prods.filter(function(x){ return x.id!==id; })); renderHistorial();
+}
+
+// ================================================================
+// INVENTARIO
+// ================================================================
+function renderInvStats() {
+  var inv=getInventario(), skus=Object.keys(inv), items=0, valor=0, sin=0;
+  skus.forEach(function(k){ items+=inv[k].stock; valor+=inv[k].stock*inv[k].precioCompra; if(!inv[k].stock) sin++; });
+  el('inv-stats').innerHTML =
+    '<div class="stat-card"><div class="stat-label">Referencias</div><div class="stat-value">'+skus.length+'</div></div>'+
+    '<div class="stat-card blue"><div class="stat-label">Unidades</div><div class="stat-value">'+items+'</div></div>'+
+    '<div class="stat-card accent"><div class="stat-label">Valor Inventario</div><div class="stat-value">'+fmt(valor)+'</div></div>'+
+    '<div class="stat-card danger"><div class="stat-label">Sin Stock</div><div class="stat-value">'+sin+'</div></div>';
+}
+
+function renderInventario() {
+  var inv=getInventario(), q=el('inv-search')?val('inv-search').toLowerCase():'';
+  var keys=Object.keys(inv).filter(function(s){ return !q||s.toLowerCase().indexOf(q)>-1||inv[s].nombre.toLowerCase().indexOf(q)>-1; });
+  if (!keys.length){ el('inv-body').innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--muted)">Sin productos</td></tr>'; return; }
+  var h=''; keys.forEach(function(sku){
+    var d=inv[sku], estado, cls='';
+    if (!d.stock)      { estado='<span class="badge badge-red">Sin stock</span>'; cls='low-stock'; }
+    else if(d.stock<=2){ estado='<span class="badge badge-yellow">Stock bajo</span>'; cls='low-stock'; }
+    else               { estado='<span class="badge badge-green">Disponible</span>'; }
+    h+='<tr class="'+cls+'"><td><strong>'+sku+'</strong></td><td>'+d.nombre+'</td><td>'+(d.categoria||'-')+'</td>';
+    h+='<td><strong>'+d.stock+'</strong></td><td>'+fmt(d.precioCompra)+'</td>';
+    h+='<td>'+fmt(d.stock*d.precioCompra)+'</td><td>'+(d.precioVenta?fmt(d.precioVenta):'-')+'</td>';
+    h+='<td>'+estado+'</td></tr>';
+  });
+  el('inv-body').innerHTML = h;
+}
+
+function exportarInventario() {
+  var inv=getInventario(), csv='SKU,Producto,Categoría,Stock,P.Compra,Total Inv.,P.Venta\n';
+  Object.keys(inv).forEach(function(sku){ var d=inv[sku]; csv+='"'+sku+'","'+d.nombre+'","'+(d.categoria||'')+'",'+d.stock+','+d.precioCompra+','+(d.stock*d.precioCompra)+','+(d.precioVenta||'')+'\n'; });
+  var a=document.createElement('a'); a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv); a.download='inventario_'+today()+'.csv'; a.click();
+}
+
+// ================================================================
+// VENTAS — pagos múltiples
+// ================================================================
+var pagosVenta = []; // [{metodo, valor}]
+
+function buscarSKU() {
+  var sku = val('v-sku').toUpperCase(); setVal('v-sku', sku);
+  var inv = getInventario();
+  if (inv[sku]) { setVal('v-producto', inv[sku].nombre); setVal('v-stock', inv[sku].stock); }
+  else { setVal('v-producto',''); setVal('v-stock',''); }
+  calcVenta();
+}
+
+function calcVenta() {
+  var cant  = parseFloat(val('v-cantidad'))||0;
+  var precio= parseFloat(val('v-valor'))||0;
+  var total = cant * precio;
+  var ivaPct= parseFloat(val('v-iva-pct'))||0;
+  // IVA ya incluido: IVA = total * ivaPct / (100 + ivaPct)
+  var ivaVal = ivaPct > 0 ? (total * ivaPct / (100 + ivaPct)) : 0;
+  setVal('v-total',   total.toFixed(0));
+  setVal('v-iva-val', ivaVal.toFixed(0));
+  actualizarResumenPagos();
+  if (val('v-tipo')==='Crédito') calcSaldoCredito();
+}
+
+function actualizarResumenPagos() {
+  var total     = parseFloat(val('v-total'))||0;
+  var totalPag  = pagosVenta.reduce(function(s,p){ return s+(parseFloat(p.valor)||0); },0);
+  var dif       = total - totalPag;
+  el('lbl-total-venta').textContent  = fmt(total);
+  el('lbl-total-pagado').textContent = fmt(totalPag);
+  el('lbl-diferencia').textContent   = dif > 0.5 ? 'Falta: '+fmt(dif) : dif < -0.5 ? 'Excede: '+fmt(-dif) : '✅ Cuadrado';
+  el('lbl-diferencia').style.color   = Math.abs(dif) < 0.5 ? 'var(--success)' : 'var(--danger)';
+}
+
+function calcSaldoCredito() {
+  var total    = parseFloat(val('v-total'))||0;
+  var totalPag = pagosVenta.reduce(function(s,p){ return s+(parseFloat(p.valor)||0); },0);
+  setVal('v-saldo', Math.max(0, total - totalPag).toFixed(0));
+}
+
+function agregarFilaPago() {
+  var metodos = getLista(KEYS.metodos, DEF_METODOS);
+  var idx = pagosVenta.length;
+  pagosVenta.push({ metodo: metodos[0], valor: '' });
+  renderFilasPago();
+}
+
+function renderFilasPago() {
+  var metodos = getLista(KEYS.metodos, DEF_METODOS);
+  var h = '';
+  pagosVenta.forEach(function(p, i) {
+    h += '<tr><td>';
+    h += '<select class="sel-metodo" onchange="pagoMetodoCambio('+i+',this.value)">';
+    metodos.forEach(function(m){ h += '<option'+(m===p.metodo?' selected':'')+'>'+m+'</option>'; });
+    h += '</select></td>';
+    h += '<td><input type="number" min="0" placeholder="0" value="'+(p.valor||'')+'" oninput="pagoValorCambio('+i+',this.value)"></td>';
+    h += '<td><button class="btn btn-danger btn-sm" onclick="eliminarFilaPago('+i+')">✕</button></td></tr>';
+  });
+  el('pagos-body').innerHTML = h || '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:8px">Sin pagos agregados — haz clic en "+ Agregar pago"</td></tr>';
+  actualizarResumenPagos();
+}
+
+function pagoMetodoCambio(i, v) { pagosVenta[i].metodo = v; }
+function pagoValorCambio(i, v)  { pagosVenta[i].valor  = parseFloat(v)||0; actualizarResumenPagos(); if(val('v-tipo')==='Crédito') calcSaldoCredito(); }
+function eliminarFilaPago(i)    { pagosVenta.splice(i,1); renderFilasPago(); }
+
+function toggleCredito() {
+  var esCredito = val('v-tipo') === 'Crédito';
+  el('saldo-group').style.display = esCredito ? '' : 'none';
+  el('lbl-pagos-tipo').textContent = esCredito ? '(Abono inicial a crédito)' : '(Contado)';
+  calcVenta();
+}
+
+function guardarVenta() {
+  var nombre=val('v-nombre').trim(), sku=val('v-sku').toUpperCase().trim(),
+      fecha=val('v-fecha'), cant=parseInt(val('v-cantidad')), total=parseFloat(val('v-total'));
+  if (!nombre||!sku||!fecha||!cant||!total) { showAlert('venta-alert','⚠ Complete los campos obligatorios (*)','error'); return; }
+
+  var inv = getInventario();
+  if (!inv[sku]) { showAlert('venta-alert','⚠ SKU no encontrado en inventario','error'); return; }
+  if (inv[sku].stock < cant) { showAlert('venta-alert','⚠ Stock insuficiente. Disponible: '+inv[sku].stock,'error'); return; }
+
+  // Validar que exista al menos un pago con valor > 0
+  var totalPag = pagosVenta.reduce(function(s,p){ return s+(parseFloat(p.valor)||0); },0);
+  if (pagosVenta.length === 0 || totalPag <= 0) {
+    showAlert('venta-alert','⚠ Debes registrar al menos un pago antes de guardar la venta.','error');
+    // Resaltar visualmente la sección de pagos
+    var pb = el('pagos-body').closest('table') || el('pagos-section');
+    if (pb) { pb.style.outline='2px solid var(--danger)'; setTimeout(function(){ pb.style.outline=''; },3000); }
+    return;
+  }
+
+  var saldo = Math.max(0, total - totalPag);
+
+  // Si seleccionó Contado pero quedó saldo pendiente → cambiar automáticamente a Crédito
+  var tipo = val('v-tipo');
+  if (tipo === 'Contado' && saldo > 1) {
+    tipo = 'Crédito';
+    showAlert('venta-alert','ℹ️ La venta tenía saldo pendiente de '+fmt(saldo)+', se guardó automáticamente como <strong>Crédito</strong>.','success');
+  }
+
+  var venta = {
+    id: Date.now(), fecha: fecha, nombre: nombre,
+    direccion: val('v-direccion'), ciudad: val('v-ciudad'),
+    telefono: val('v-telefono'), correo: val('v-correo'),
+    canal: val('v-canal'), sku: sku, producto: val('v-producto'),
+    cantidad: cant, valor: parseFloat(val('v-valor')),
+    ivaPct: parseFloat(val('v-iva-pct'))||0,
+    ivaVal: parseFloat(val('v-iva-val'))||0,
+    total: total, tipo: tipo,
+    pagos: pagosVenta.slice(),
+    abono: totalPag, saldo: saldo,
+    factura: val('v-factura'), obs: val('v-obs'),
+    abonos: []
+  };
+
+  inv[sku].stock -= cant; setInventario(inv);
+  var ventas = DB.get(KEYS.ventas); ventas.push(venta); DB.set(KEYS.ventas, ventas);
+
+  showAlert('venta-alert','✅ Venta registrada. '+(tipo==='Crédito'?'Saldo pendiente: '+fmt(saldo):'Total pagado: '+fmt(totalPag)));
+  limpiarVenta(); renderVentas();
+}
+
+function limpiarVenta() {
+  ['v-nombre','v-direccion','v-ciudad','v-telefono','v-correo','v-sku','v-producto','v-factura','v-obs'].forEach(function(id){ setVal(id,''); });
+  setVal('v-stock',''); setVal('v-cantidad',1); setVal('v-valor','');
+  setVal('v-total',''); setVal('v-iva-val',''); setVal('v-saldo','');
+  setVal('v-fecha',today());
+  el('v-iva-pct').value = '0'; el('v-tipo').value = 'Contado';
+  el('saldo-group').style.display = 'none';
+  el('lbl-pagos-tipo').textContent = '(Contado)';
+  pagosVenta = []; renderFilasPago();
+}
+
+function limpiarFiltrosVentas() {
+  setVal('ventas-search',''); setVal('ventas-fecha-desde',''); setVal('ventas-fecha-hasta','');
+  el('ventas-filter').value=''; el('ventas-canal-filter').value='';
+  el('ventas-resumen').style.display='none';
+  renderVentas();
+}
+
+function renderVentas() {
+  // Llenar filtro de canales
+  var canales = getLista(KEYS.canales, DEF_CANALES);
+  var cf = el('ventas-canal-filter');
+  var prevCanal = cf.value;
+  cf.innerHTML = '<option value="">Todos los canales</option>';
+  canales.forEach(function(c){ cf.innerHTML += '<option value="'+c+'">'+ c +'</option>'; });
+  if (prevCanal) cf.value = prevCanal;
+
+  var ventas = DB.get(KEYS.ventas);
+  var q      = val('ventas-search').toLowerCase();
+  var f      = val('ventas-filter');
+  var canal  = val('ventas-canal-filter');
+  var desde  = val('ventas-fecha-desde');
+  var hasta  = val('ventas-fecha-hasta');
+
+  var list = ventas.filter(function(v){
+    var matchQ = !q || v.nombre.toLowerCase().indexOf(q)>-1 || v.sku.toLowerCase().indexOf(q)>-1 ||
+                 (v.telefono||'').indexOf(q)>-1 || (v.factura||'').toLowerCase().indexOf(q)>-1;
+    var matchF = !f     || v.tipo === f;
+    var matchC = !canal || (v.canal||'') === canal;
+    var matchD = !desde || v.fecha >= desde;
+    var matchH = !hasta || v.fecha <= hasta;
+    return matchQ && matchF && matchC && matchD && matchH;
+  }).reverse();
+
+  // Resumen de resultados
+  if (q || f || canal || desde || hasta) {
+    var totalFiltrado = list.reduce(function(s,v){ return s+v.total; },0);
+    el('ventas-resumen').style.display = '';
+    el('ventas-resumen').innerHTML = '📊 <strong>'+list.length+'</strong> ventas encontradas &nbsp;|&nbsp; Total: <strong>'+fmt(totalFiltrado)+'</strong>';
+  } else {
+    el('ventas-resumen').style.display = 'none';
+  }
+
+  if (!list.length){ el('ventas-body').innerHTML='<tr><td colspan="12" style="text-align:center;color:var(--muted);padding:16px">Sin ventas que coincidan con la búsqueda</td></tr>'; return; }
+  var h=''; list.forEach(function(v){
+    var totalAb = (v.abono||0) + (v.abonos||[]).reduce(function(s,a){ return s+a.valor; },0);
+    var saldoR  = Math.max(0, v.total - totalAb);
+    var sc = saldoR>0?'saldo-pendiente':'saldo-pagado';
+    var tb = v.tipo==='Crédito'?'badge-yellow':'badge-green';
+    var pagosStr = (v.pagos||[]).map(function(p){ return p.metodo+': '+fmt(p.valor); }).join('<br>') || (v.formapago||'-');
+    h+='<tr>';
+    h+='<td>'+v.fecha+'</td>';
+    h+='<td><span class="badge badge-blue">'+(v.canal||'-')+'</span></td>';
+    h+='<td><strong>'+v.nombre+'</strong>'+(v.telefono?'<br><small style="color:var(--muted)">'+v.telefono+'</small>':'')+'</td>';
+    h+='<td><strong>'+v.sku+'</strong></td>';
+    h+='<td>'+v.producto+'</td>';
+    h+='<td>'+v.cantidad+'</td>';
+    h+='<td>'+fmt(v.total)+'</td>';
+    h+='<td>'+fmt(totalAb)+'</td>';
+    h+='<td class="'+sc+'">'+fmt(saldoR)+'</td>';
+    h+='<td><span class="badge '+tb+'">'+v.tipo+'</span></td>';
+    h+='<td style="font-size:12px">'+pagosStr+'</td>';
+    h+='<td style="white-space:nowrap">';
+    h+='<button class="btn btn-warning btn-sm" onclick="abrirEditorVenta('+v.id+')" style="margin-bottom:4px">✏️ Editar</button> ';
+    h+='<button class="btn btn-danger btn-sm" onclick="eliminarVenta('+v.id+')">✕</button>';
+    h+='</td>';
+    h+='</tr>';
+  });
+  el('ventas-body').innerHTML = h;
+}
+
+function eliminarVenta(id) {
+  if (!confirm('¿Eliminar esta venta? Se revertirá el stock.')) return;
+  var ventas=DB.get(KEYS.ventas), v=null; ventas.forEach(function(x){ if(x.id===id) v=x; });
+  if (v){ var inv=getInventario(); if(inv[v.sku]) inv[v.sku].stock+=v.cantidad; setInventario(inv); }
+  DB.set(KEYS.ventas, ventas.filter(function(x){ return x.id!==id; })); renderVentas();
+}
+
+// ================================================================
+// EDITAR VENTA
+// ================================================================
+var editVentaId   = null;
+var evPagos       = [];   // pagos del editor
+var evSkuOriginal = null;
+var evCantOriginal= 0;
+
+function abrirEditorVenta(id) {
+  var ventas = DB.get(KEYS.ventas), v = null;
+  ventas.forEach(function(x){ if(x.id===id) v=x; });
+  if (!v) return;
+
+  editVentaId    = id;
+  evSkuOriginal  = v.sku;
+  evCantOriginal = v.cantidad;
+
+  // Llenar canales en el select del modal
+  var canales = getLista(KEYS.canales, DEF_CANALES);
+  var sc = el('ev-canal'); sc.innerHTML='';
+  canales.forEach(function(c){ var o=document.createElement('option'); o.value=c; o.textContent=c; sc.appendChild(o); });
+
+  // Llenar campos
+  setVal('ev-nombre',    v.nombre||'');
+  setVal('ev-telefono',  v.telefono||'');
+  setVal('ev-direccion', v.direccion||'');
+  setVal('ev-ciudad',    v.ciudad||'');
+  setVal('ev-correo',    v.correo||'');
+  setVal('ev-fecha',     v.fecha||'');
+  el('ev-canal').value = v.canal||'';
+  setVal('ev-sku',       v.sku||'');
+  setVal('ev-producto',  v.producto||'');
+  setVal('ev-cantidad',  v.cantidad||1);
+  setVal('ev-valor',     v.valor||'');
+  el('ev-iva-pct').value = v.ivaPct||0;
+  setVal('ev-factura',   v.factura||'');
+  setVal('ev-obs',       v.obs||'');
+  el('ev-tipo').value  = v.tipo||'Contado';
+
+  // Stock actual (incluyendo la cantidad de esta venta ya descontada)
+  var inv = getInventario();
+  var stockActual = inv[v.sku] ? inv[v.sku].stock + v.cantidad : 0;
+  setVal('ev-stock', stockActual);
+
+  // Copiar pagos
+  evPagos = (v.pagos && v.pagos.length) ? JSON.parse(JSON.stringify(v.pagos)) : [];
+
+  el('edit-venta-alert').innerHTML = '';
+  ev_calcular();
+  ev_toggleCredito();
+  ev_renderPagos();
+
+  el('modal-editar-venta').classList.add('open');
+}
+
+function cerrarEditorVenta() {
+  el('modal-editar-venta').classList.remove('open');
+  editVentaId = null; evPagos = [];
+}
+
+function ev_buscarSKU() {
+  var sku = val('ev-sku').toUpperCase(); setVal('ev-sku', sku);
+  var inv = getInventario();
+  // stock disponible = stock real + cantidad original de esta venta
+  if (inv[sku]) {
+    setVal('ev-producto', inv[sku].nombre);
+    var extra = (sku === evSkuOriginal) ? evCantOriginal : 0;
+    setVal('ev-stock', inv[sku].stock + extra);
+  } else {
+    setVal('ev-producto',''); setVal('ev-stock','0');
+  }
+  ev_calcular();
+}
+
+function ev_calcular() {
+  var cant  = parseFloat(val('ev-cantidad'))||0;
+  var precio= parseFloat(val('ev-valor'))||0;
+  var total = cant * precio;
+  var ivaPct= parseFloat(val('ev-iva-pct'))||0;
+  var ivaVal= ivaPct>0 ? (total*ivaPct/(100+ivaPct)) : 0;
+  setVal('ev-total',   total.toFixed(0));
+  setVal('ev-iva-val', ivaVal.toFixed(0));
+  ev_actualizarResumen();
+  if (val('ev-tipo')==='Crédito') ev_calcSaldo();
+}
+
+function ev_actualizarResumen() {
+  var total    = parseFloat(val('ev-total'))||0;
+  var pagado   = evPagos.reduce(function(s,p){ return s+(parseFloat(p.valor)||0); },0);
+  var dif      = total - pagado;
+  el('ev-lbl-total').textContent  = fmt(total);
+  el('ev-lbl-pagado').textContent = fmt(pagado);
+  el('ev-lbl-dif').textContent    = Math.abs(dif)<0.5 ? '✅ Cuadrado' : dif>0 ? 'Falta: '+fmt(dif) : 'Excede: '+fmt(-dif);
+  el('ev-lbl-dif').style.color    = Math.abs(dif)<0.5 ? 'var(--success)' : 'var(--danger)';
+}
+
+function ev_calcSaldo() {
+  var total  = parseFloat(val('ev-total'))||0;
+  var pagado = evPagos.reduce(function(s,p){ return s+(parseFloat(p.valor)||0); },0);
+  setVal('ev-saldo', Math.max(0, total-pagado).toFixed(0));
+}
+
+function ev_toggleCredito() {
+  var esC = val('ev-tipo')==='Crédito';
+  el('ev-saldo-group').style.display = esC ? '' : 'none';
+  el('ev-lbl-tipo').textContent = esC ? '(Abono inicial a crédito)' : '(Contado)';
+  ev_calcSaldo();
+}
+
+function ev_agregarPago() {
+  var metodos = getLista(KEYS.metodos, DEF_METODOS);
+  evPagos.push({ metodo: metodos[0], valor: '' });
+  ev_renderPagos();
+}
+
+function ev_renderPagos() {
+  var metodos = getLista(KEYS.metodos, DEF_METODOS);
+  var h = '';
+  evPagos.forEach(function(p, i) {
+    h += '<tr><td><select onchange="ev_pagoMetodo('+i+',this.value)">';
+    metodos.forEach(function(m){ h+='<option'+(m===p.metodo?' selected':'')+'>'+m+'</option>'; });
+    h += '</select></td>';
+    h += '<td><input type="number" min="0" placeholder="0" value="'+(p.valor||'')+'" oninput="ev_pagoValor('+i+',this.value)"></td>';
+    h += '<td><button class="btn btn-danger btn-sm" onclick="ev_eliminarPago('+i+')">✕</button></td></tr>';
+  });
+  el('ev-pagos-body').innerHTML = h || '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:8px">Sin pagos — agrega uno</td></tr>';
+  ev_actualizarResumen();
+}
+
+function ev_pagoMetodo(i,v){ evPagos[i].metodo=v; }
+function ev_pagoValor(i,v) { evPagos[i].valor=parseFloat(v)||0; ev_actualizarResumen(); if(val('ev-tipo')==='Crédito') ev_calcSaldo(); }
+function ev_eliminarPago(i){ evPagos.splice(i,1); ev_renderPagos(); }
+
+function guardarEdicionVenta() {
+  var nombre = val('ev-nombre').trim();
+  var sku    = val('ev-sku').toUpperCase().trim();
+  var fecha  = val('ev-fecha');
+  var cant   = parseInt(val('ev-cantidad'));
+  var total  = parseFloat(val('ev-total'));
+
+  if (!nombre||!sku||!fecha||!cant||!total) { showAlert('edit-venta-alert','⚠ Complete los campos obligatorios (*)','error'); return; }
+  if (evPagos.length===0) { showAlert('edit-venta-alert','⚠ Agrega al menos un pago','error'); return; }
+
+  var inv = getInventario();
+  // Calcular stock disponible para la nueva combinación SKU/cantidad
+  var stockBase;
+  if (sku === evSkuOriginal) {
+    // mismo producto: devolver cantidad original primero
+    stockBase = (inv[sku] ? inv[sku].stock : 0) + evCantOriginal;
+  } else {
+    // producto distinto: verificar nuevo SKU existe
+    if (!inv[sku]) { showAlert('edit-venta-alert','⚠ SKU "'+sku+'" no encontrado en inventario','error'); return; }
+    stockBase = inv[sku].stock;
+  }
+  if (stockBase < cant) { showAlert('edit-venta-alert','⚠ Stock insuficiente. Disponible: '+stockBase,'error'); return; }
+
+  var tipo   = val('ev-tipo');
+  var pagado = evPagos.reduce(function(s,p){ return s+(parseFloat(p.valor)||0); },0);
+  var saldo  = Math.max(0, total - pagado);
+
+  if (tipo==='Contado' && Math.abs(total-pagado)>1) {
+    if (!confirm('El total pagado ('+fmt(pagado)+') no coincide con el total ('+fmt(total)+'). ¿Continuar?')) return;
+  }
+
+  // Ajustar inventario
+  if (sku === evSkuOriginal) {
+    inv[sku].stock = stockBase - cant;
+  } else {
+    // Devolver al SKU original
+    if (inv[evSkuOriginal]) inv[evSkuOriginal].stock += evCantOriginal;
+    // Descontar del nuevo
+    inv[sku].stock -= cant;
+  }
+  setInventario(inv);
+
+  // Actualizar venta
+  var ventas = DB.get(KEYS.ventas);
+  var idx = -1; ventas.forEach(function(x,i){ if(x.id===editVentaId) idx=i; });
+  if (idx===-1) return;
+
+  var vOld = ventas[idx];
+  ventas[idx] = {
+    id:        vOld.id,
+    fecha:     fecha,
+    nombre:    nombre,
+    telefono:  val('ev-telefono'),
+    direccion: val('ev-direccion'),
+    ciudad:    val('ev-ciudad'),
+    correo:    val('ev-correo'),
+    canal:     val('ev-canal'),
+    sku:       sku,
+    producto:  val('ev-producto'),
+    cantidad:  cant,
+    valor:     parseFloat(val('ev-valor')),
+    ivaPct:    parseFloat(val('ev-iva-pct'))||0,
+    ivaVal:    parseFloat(val('ev-iva-val'))||0,
+    total:     total,
+    tipo:      tipo,
+    pagos:     JSON.parse(JSON.stringify(evPagos)),
+    abono:     pagado,
+    saldo:     saldo,
+    factura:   val('ev-factura'),
+    obs:       val('ev-obs'),
+    abonos:    vOld.abonos || []   // conservar abonos posteriores
+  };
+  DB.set(KEYS.ventas, ventas);
+
+  cerrarEditorVenta();
+  renderVentas();
+  alert('✅ Venta actualizada correctamente.');
+}
+
+// ================================================================
+// CARTERA
+// ================================================================
+var abonoVentaId = null;
+
+function renderCarteraStats() {
+  var ventas=DB.get(KEYS.ventas).filter(function(v){ return v.tipo==='Crédito'; });
+  var total=0, abonado=0;
+  ventas.forEach(function(v){ total+=v.total; abonado+=(v.abono||0)+(v.abonos||[]).reduce(function(s,a){ return s+a.valor; },0); });
+  var pend = Math.max(0,total-abonado);
+  var pagas = ventas.filter(function(v){ var ab=(v.abono||0)+(v.abonos||[]).reduce(function(s,a){ return s+a.valor; },0); return ab>=v.total; }).length;
+  el('cartera-stats').innerHTML =
+    '<div class="stat-card"><div class="stat-label">Total Créditos</div><div class="stat-value">'+ventas.length+'</div></div>'+
+    '<div class="stat-card blue"><div class="stat-label">Total Facturado</div><div class="stat-value">'+fmt(total)+'</div></div>'+
+    '<div class="stat-card accent"><div class="stat-label">Total Abonado</div><div class="stat-value">'+fmt(abonado)+'</div></div>'+
+    '<div class="stat-card danger"><div class="stat-label">Saldo Pendiente</div><div class="stat-value">'+fmt(pend)+'</div></div>';
+}
+
+function renderCartera() {
+  var ventas=DB.get(KEYS.ventas).filter(function(v){ return v.tipo==='Crédito'; }).reverse();
+  var q=val('cartera-search').toLowerCase();
+  var list=ventas.filter(function(v){ return !q||v.nombre.toLowerCase().indexOf(q)>-1; });
+  if (!list.length){ el('cartera-body').innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--muted)">Sin ventas a crédito</td></tr>'; return; }
+  var h=''; list.forEach(function(v){
+    var abs=v.abonos||[];
+    var totalAb=(v.abono||0)+abs.reduce(function(s,a){ return s+a.valor; },0);
+    var saldo=Math.max(0,v.total-totalAb);
+    var sc=saldo>0?'saldo-pendiente':'saldo-pagado';
+    var estado=saldo<=0?'<span class="badge badge-green">Pagado</span>':'<span class="badge badge-yellow">Pendiente</span>';
+    var btnAbono=saldo>0?'<button class="btn btn-primary btn-sm" onclick="abrirAbono('+v.id+')">+ Abono</button>':'';
+
+    // Tabla de pagos iniciales
+    var detH='<div class="detalle-abonos"><strong style="font-size:12px;color:var(--primary)">Pagos registrados:</strong><table><thead><tr><th>Fecha</th><th>Valor</th><th>Forma</th><th></th></tr></thead><tbody>';
+    // Pagos múltiples del momento de la venta
+    (v.pagos||[]).forEach(function(p){
+      detH+='<tr><td>'+v.fecha+'</td><td>'+fmt(p.valor)+'</td><td>'+p.metodo+'</td><td><em style="color:var(--muted)">inicial</em></td></tr>';
+    });
+    // Abonos posteriores
+    abs.forEach(function(a,i){
+      detH+='<tr><td>'+a.fecha+'</td><td>'+fmt(a.valor)+'</td><td>'+(a.forma||'-')+'</td>';
+      detH+='<td><button class="btn btn-danger btn-sm" onclick="eliminarAbono('+v.id+','+i+')">✕</button></td></tr>';
+    });
+    detH+='</tbody></table></div>';
+
+    h+='<tr>';
+    h+='<td>'+v.fecha+'</td>';
+    h+='<td><strong>'+v.nombre+'</strong><br><small style="color:var(--muted)">'+(v.ciudad||'')+'</small></td>';
+    h+='<td>'+(v.telefono||'-')+'</td>';
+    h+='<td>'+v.producto+'</td>';
+    h+='<td>'+fmt(v.total)+'</td>';
+    h+='<td>'+fmt(totalAb)+'</td>';
+    h+='<td class="'+sc+'">'+fmt(saldo)+'</td>';
+    h+='<td>'+estado+'</td>';
+    h+='<td>'+btnAbono+detH+'</td>';
+    h+='</tr>';
+  });
+  el('cartera-body').innerHTML = h;
+}
+
+function abrirAbono(id) {
+  abonoVentaId = id;
+  var ventas=DB.get(KEYS.ventas), v=null; ventas.forEach(function(x){ if(x.id===id) v=x; });
+  if (!v) return;
+  var totalAb=(v.abono||0)+(v.abonos||[]).reduce(function(s,a){ return s+a.valor; },0);
+  var saldo=v.total-totalAb;
+  el('abono-info').innerHTML='<strong>Cliente:</strong> '+v.nombre+' &nbsp;|&nbsp; <strong>Producto:</strong> '+v.producto+' &nbsp;|&nbsp; <strong>Total:</strong> '+fmt(v.total)+' &nbsp;|&nbsp; <strong>Saldo:</strong> <span class="saldo-pendiente">'+fmt(saldo)+'</span>';
+  setVal('abono-valor',''); setVal('abono-fecha',today());
+  el('abono-alert').innerHTML='';
+  refrescarDropdowns();
+  el('modal-abono').classList.add('open');
+}
+
+function cerrarModalAbono() { el('modal-abono').classList.remove('open'); abonoVentaId=null; }
+
+function confirmarAbono() {
+  var valor=parseFloat(val('abono-valor'));
+  if (!valor||valor<=0){ showAlert('abono-alert','⚠ Ingrese un valor válido','error'); return; }
+  var ventas=DB.get(KEYS.ventas), idx=-1; ventas.forEach(function(x,i){ if(x.id===abonoVentaId) idx=i; });
+  if (idx===-1) return;
+  var totalAb=(ventas[idx].abono||0)+(ventas[idx].abonos||[]).reduce(function(s,a){ return s+a.valor; },0);
+  var saldo=ventas[idx].total-totalAb;
+  if (valor>saldo+0.01){ showAlert('abono-alert','⚠ El abono supera el saldo ('+fmt(saldo)+')','error'); return; }
+  if (!ventas[idx].abonos) ventas[idx].abonos=[];
+  ventas[idx].abonos.push({ fecha:val('abono-fecha'), valor:valor, forma:val('abono-forma') });
+  DB.set(KEYS.ventas, ventas);
+  cerrarModalAbono(); renderCartera(); renderCarteraStats();
+}
+
+function eliminarAbono(ventaId, abonoIdx) {
+  if (!confirm('¿Eliminar este abono?')) return;
+  var ventas=DB.get(KEYS.ventas), idx=-1; ventas.forEach(function(x,i){ if(x.id===ventaId) idx=i; });
+  if (idx===-1) return;
+  ventas[idx].abonos.splice(abonoIdx,1); DB.set(KEYS.ventas,ventas);
+  renderCartera(); renderCarteraStats();
+}
+
+// ================================================================
+// GASTOS
+// ================================================================
+function guardarGasto() {
+  var fecha=val('g-fecha'), concepto=val('g-concepto').trim(), valor=parseFloat(val('g-valor'));
+  if (!fecha||!concepto||!valor){ showAlert('gasto-alert','⚠ Complete los campos obligatorios','error'); return; }
+  var g={ id:Date.now(), fecha:fecha, concepto:concepto, categoria:val('g-categoria'), valor:valor, formapago:val('g-formapago'), comprobante:val('g-comprobante') };
+  var gastos=DB.get(KEYS.gastos); gastos.push(g); DB.set(KEYS.gastos,gastos);
+  showAlert('gasto-alert','✅ Gasto de '+fmt(valor)+' registrado');
+  limpiarGasto(); renderGastos();
+}
+
+function limpiarGasto() { setVal('g-fecha',today()); setVal('g-concepto',''); setVal('g-valor',''); setVal('g-comprobante',''); }
+
+function renderGastos() {
+  var gastos=DB.get(KEYS.gastos), q=val('gastos-search').toLowerCase(), mes=val('gastos-mes');
+  var list=gastos.filter(function(g){ return (!q||g.concepto.toLowerCase().indexOf(q)>-1||g.categoria.toLowerCase().indexOf(q)>-1)&&(!mes||g.fecha.indexOf(mes)===0); }).reverse();
+  var total=list.reduce(function(s,g){ return s+g.valor; },0);
+  if (!list.length){ el('gastos-body').innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--muted)">Sin gastos</td></tr>'; el('gastos-total').textContent=fmt(0); return; }
+  var h=''; list.forEach(function(g){
+    h+='<tr><td>'+g.fecha+'</td><td>'+g.concepto+'</td>';
+    h+='<td><span class="badge badge-blue">'+g.categoria+'</span></td>';
+    h+='<td>'+(g.formapago||'-')+'</td>';
+    h+='<td>'+(g.comprobante||'-')+'</td>';
+    h+='<td>'+fmt(g.valor)+'</td>';
+    h+='<td><button class="btn btn-danger btn-sm" onclick="eliminarGasto('+g.id+')">✕</button></td></tr>';
+  });
+  el('gastos-body').innerHTML=h; el('gastos-total').textContent=fmt(total);
+}
+
+function eliminarGasto(id) {
+  if (!confirm('¿Eliminar este gasto?')) return;
+  DB.set(KEYS.gastos, DB.get(KEYS.gastos).filter(function(g){ return g.id!==id; })); renderGastos();
+}
+
+// ================================================================
+// REPORTES
+// ================================================================
+function renderReportes() {
+  var ventas=DB.get(KEYS.ventas), gastos=DB.get(KEYS.gastos);
+  var tv=ventas.reduce(function(s,v){ return s+v.total; },0);
+  var tg=gastos.reduce(function(s,g){ return s+g.valor; },0);
+  var pend=ventas.filter(function(v){ return v.tipo==='Crédito'; }).reduce(function(s,v){
+    var ab=(v.abono||0)+(v.abonos||[]).reduce(function(x,a){ return x+a.valor; },0); return s+Math.max(0,v.total-ab);
+  },0);
+  el('rep-stats').innerHTML=
+    '<div class="stat-card"><div class="stat-label">Total Ventas</div><div class="stat-value">'+fmt(tv)+'</div></div>'+
+    '<div class="stat-card danger"><div class="stat-label">Total Gastos</div><div class="stat-value">'+fmt(tg)+'</div></div>'+
+    '<div class="stat-card accent"><div class="stat-label">Utilidad Bruta</div><div class="stat-value">'+fmt(tv-tg)+'</div></div>'+
+    '<div class="stat-card blue"><div class="stat-label">Cartera Pendiente</div><div class="stat-value">'+fmt(pend)+'</div></div>';
+
+  var vxm={};
+  ventas.forEach(function(v){ var m=v.fecha.slice(0,7); if(!vxm[m]) vxm[m]={n:0,t:0}; vxm[m].n++; vxm[m].t+=v.total; });
+  var hM=''; Object.keys(vxm).sort().reverse().forEach(function(m){ hM+='<tr><td>'+m+'</td><td>'+vxm[m].n+'</td><td>'+fmt(vxm[m].t)+'</td></tr>'; });
+  el('rep-ventas-mes').innerHTML=hM||'<tr><td colspan="3" style="text-align:center;color:var(--muted)">Sin datos</td></tr>';
+
+  var gxc={};
+  gastos.forEach(function(g){ gxc[g.categoria]=(gxc[g.categoria]||0)+g.valor; });
+  var hG=''; Object.keys(gxc).sort(function(a,b){ return gxc[b]-gxc[a]; }).forEach(function(c){ hG+='<tr><td>'+c+'</td><td>'+fmt(gxc[c])+'</td></tr>'; });
+  el('rep-gastos-cat').innerHTML=hG||'<tr><td colspan="2" style="text-align:center;color:var(--muted)">Sin datos</td></tr>';
+
+  var top={};
+  ventas.forEach(function(v){ if(!top[v.sku]) top[v.sku]={nombre:v.producto,cant:0,total:0}; top[v.sku].cant+=v.cantidad; top[v.sku].total+=v.total; });
+  var hT=''; Object.keys(top).sort(function(a,b){ return top[b].total-top[a].total; }).slice(0,10).forEach(function(s){ hT+='<tr><td>'+s+'</td><td>'+top[s].nombre+'</td><td>'+top[s].cant+'</td><td>'+fmt(top[s].total)+'</td></tr>'; });
+  el('rep-top').innerHTML=hT||'<tr><td colspan="4" style="text-align:center;color:var(--muted)">Sin datos</td></tr>';
+
+  var vxc={};
+  ventas.forEach(function(v){ var c=v.canal||'Sin canal'; if(!vxc[c]) vxc[c]={n:0,t:0}; vxc[c].n++; vxc[c].t+=v.total; });
+  var hC=''; Object.keys(vxc).sort(function(a,b){ return vxc[b].t-vxc[a].t; }).forEach(function(c){ hC+='<tr><td>'+c+'</td><td>'+vxc[c].n+'</td><td>'+fmt(vxc[c].t)+'</td></tr>'; });
+  el('rep-canal').innerHTML=hC||'<tr><td colspan="3" style="text-align:center;color:var(--muted)">Sin datos</td></tr>';
+  renderCaja();
+}
+
+function renderCaja() {
+  var ventas = DB.get(KEYS.ventas);
+  var gastos = DB.get(KEYS.gastos);
+
+  // Recopilar todos los métodos con movimientos
+  var metodos = {};
+
+  function addEntrada(metodo, fecha, concepto, valor) {
+    valor = parseFloat(valor) || 0; if (!valor) return;
+    var k = metodo || 'Sin especificar';
+    if (!metodos[k]) metodos[k] = { entradas: [], salidas: [] };
+    metodos[k].entradas.push({ fecha: fecha, concepto: concepto, valor: valor });
+  }
+
+  function addSalida(metodo, fecha, concepto, valor) {
+    valor = parseFloat(valor) || 0; if (!valor) return;
+    var k = metodo || 'Sin especificar';
+    if (!metodos[k]) metodos[k] = { entradas: [], salidas: [] };
+    metodos[k].salidas.push({ fecha: fecha, concepto: concepto, valor: valor });
+  }
+
+  // Entradas: pagos iniciales de ventas
+  ventas.forEach(function(v) {
+    (v.pagos||[]).forEach(function(p) {
+      addEntrada(p.metodo, v.fecha, 'Venta — '+v.nombre+' ('+v.sku+')', p.valor);
+    });
+    // Abonos posteriores a crédito
+    (v.abonos||[]).forEach(function(a) {
+      addEntrada(a.forma, a.fecha, 'Abono — '+v.nombre, a.valor);
+    });
+  });
+
+  // Salidas: gastos
+  gastos.forEach(function(g) {
+    addSalida(g.formapago, g.fecha, g.concepto, g.valor);
+  });
+
+  // Ordenar cada grupo por fecha desc
+  Object.keys(metodos).forEach(function(k) {
+    metodos[k].entradas.sort(function(a,b){ return b.fecha.localeCompare(a.fecha); });
+    metodos[k].salidas.sort(function(a,b){  return b.fecha.localeCompare(a.fecha); });
+  });
+
+  // ── EFECTIVO separado ──────────────────────────────────────
+  var ef = metodos['Efectivo'] || { entradas: [], salidas: [] };
+  var efE = ef.entradas.reduce(function(s,e){ return s+e.valor; },0);
+  var efS = ef.salidas.reduce(function(s,e){  return s+e.valor; },0);
+  var efD = efE - efS;
+  var efColor = efD >= 0 ? 'var(--success)' : 'var(--danger)';
+
+  el('caja-efectivo-stats').innerHTML =
+    '<div style="background:white;border-radius:10px;border:1px solid var(--border);padding:16px;min-width:180px;border-left:4px solid var(--primary);box-shadow:0 1px 4px rgba(0,0,0,.07)">'+
+      '<div class="stat-label">📥 Entradas</div><div class="stat-value" style="color:var(--success)">'+fmt(efE)+'</div></div>'+
+    '<div style="background:white;border-radius:10px;border:1px solid var(--border);padding:16px;min-width:180px;border-left:4px solid var(--danger);box-shadow:0 1px 4px rgba(0,0,0,.07)">'+
+      '<div class="stat-label">📤 Salidas</div><div class="stat-value" style="color:var(--danger)">'+fmt(efS)+'</div></div>'+
+    '<div style="background:white;border-radius:10px;border:1px solid var(--border);padding:16px;min-width:200px;border-left:4px solid '+efColor+';box-shadow:0 1px 4px rgba(0,0,0,.07)">'+
+      '<div class="stat-label">💵 Disponible en Caja</div><div class="stat-value" style="color:'+efColor+'">'+fmt(efD)+'</div></div>';
+
+  var hEE = ef.entradas.map(function(e){ return '<tr><td>'+e.fecha+'</td><td>'+e.concepto+'</td><td style="color:var(--success);font-weight:700">+'+fmt(e.valor)+'</td></tr>'; }).join('');
+  var hES = ef.salidas.map(function(s){  return '<tr><td>'+s.fecha+'</td><td>'+s.concepto+'</td><td style="color:var(--danger);font-weight:700">−'+fmt(s.valor)+'</td></tr>'; }).join('');
+  el('caja-efectivo-entradas').innerHTML = hEE || '<tr><td colspan="3" style="text-align:center;color:var(--muted)">Sin entradas en efectivo</td></tr>';
+  el('caja-efectivo-salidas').innerHTML  = hES || '<tr><td colspan="3" style="text-align:center;color:var(--muted)">Sin gastos en efectivo</td></tr>';
+
+  // ── OTROS MÉTODOS ───────────────────────────────────────────
+  var otrosKeys = Object.keys(metodos).filter(function(k){ return k !== 'Efectivo'; }).sort();
+
+  if (!otrosKeys.length) {
+    el('caja-resumen-tarjetas').innerHTML = '<p style="color:var(--muted);font-size:13px">Sin movimientos en otros medios de pago.</p>';
+    el('caja-detalle').innerHTML = '';
+    return;
+  }
+
+  var colores = ['#3498db','#8e44ad','#e67e22','#16a085','#c0392b','#2c3e50','#d4920a','#1a7f4b'];
+  var hCards = '', hDetalle = '', ci = 0;
+
+  otrosKeys.forEach(function(k) {
+    var m   = metodos[k];
+    var totalE = m.entradas.reduce(function(s,e){ return s+e.valor; },0);
+    var totalS = m.salidas.reduce(function(s,e){  return s+e.valor; },0);
+    var disp   = totalE - totalS;
+    var color  = colores[ci % colores.length]; ci++;
+    var dispColor = disp >= 0 ? 'var(--success)' : 'var(--danger)';
+
+    // Tarjeta
+    hCards +=
+      '<div style="background:white;border-radius:10px;border:1px solid var(--border);padding:16px;min-width:180px;border-left:4px solid '+color+';box-shadow:0 1px 4px rgba(0,0,0,.07)">'+
+        '<div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">'+k+'</div>'+
+        '<div style="font-size:20px;font-weight:800;color:'+dispColor+'">'+fmt(disp)+'</div>'+
+        '<div style="font-size:11px;color:var(--muted);margin-top:6px">'+
+          '↑ '+fmt(totalE)+' &nbsp; ↓ '+fmt(totalS)+
+        '</div>'+
+      '</div>';
+
+    // Detalle expandible
+    var rowsE = m.entradas.map(function(e){
+      return '<tr><td>'+e.fecha+'</td><td>'+e.concepto+'</td><td style="color:var(--success);font-weight:700">+'+fmt(e.valor)+'</td></tr>';
+    }).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--muted)">Sin entradas</td></tr>';
+
+    var rowsS = m.salidas.map(function(s){
+      return '<tr><td>'+s.fecha+'</td><td>'+s.concepto+'</td><td style="color:var(--danger);font-weight:700">−'+fmt(s.valor)+'</td></tr>';
+    }).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--muted)">Sin salidas</td></tr>';
+
+    hDetalle +=
+      '<div style="margin-bottom:20px;border:1px solid var(--border);border-radius:10px;overflow:hidden">'+
+        '<div style="background:'+color+';color:white;padding:10px 16px;font-weight:700;font-size:14px;display:flex;justify-content:space-between;align-items:center">'+
+          '<span>'+k+'</span>'+
+          '<span style="font-size:13px;opacity:.9">Disponible: '+fmt(disp)+'</span>'+
+        '</div>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0">'+
+          '<div style="padding:12px;border-right:1px solid var(--border)">'+
+            '<div style="font-size:11px;font-weight:700;color:var(--primary);text-transform:uppercase;margin-bottom:8px">📥 Entradas &nbsp;<strong>'+fmt(totalE)+'</strong></div>'+
+            '<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Concepto</th><th>Valor</th></tr></thead><tbody>'+rowsE+'</tbody></table></div>'+
+          '</div>'+
+          '<div style="padding:12px">'+
+            '<div style="font-size:11px;font-weight:700;color:var(--danger);text-transform:uppercase;margin-bottom:8px">📤 Salidas &nbsp;<strong>'+fmt(totalS)+'</strong></div>'+
+            '<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Concepto</th><th>Valor</th></tr></thead><tbody>'+rowsS+'</tbody></table></div>'+
+          '</div>'+
+        '</div>'+
+      '</div>';
+  });
+
+  el('caja-resumen-tarjetas').innerHTML = hCards;
+  el('caja-detalle').innerHTML = hDetalle;
+}
+
+// ================================================================
+// INIT
+// ================================================================
+function borrarTodosLosDatos() {
+  if (!confirm('⚠️ ¿Estás seguro de que quieres borrar TODOS los datos?\n\nSe eliminarán productos, ventas, gastos e inventario.\n\nEsta acción NO se puede deshacer.')) return;
+  if (!confirm('Segunda confirmación: ¿Borrar todo definitivamente?')) return;
+  var empty = {};
+  Object.values(KEYS).forEach(function(k){ empty[k] = []; });
+  empty[KEYS.inventario] = {};
+  fetch('/api/save', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(empty) })
+    .then(function(){ alert('✅ Todos los datos han sido eliminados.'); location.reload(); });
+  return;
+}
+
+window.onload = function() {
+  setVal('p-fecha', today()); setVal('v-fecha', today()); setVal('g-fecha', today());
+  fetch('/api/load').then(function(r){ return r.json(); }).then(function(data){
+    _cache = data || {};
+    refrescarDropdowns();
+    pagosVenta = []; renderFilasPago();
+    renderInventario(); renderInvStats();
+  }).catch(function(){
+    refrescarDropdowns();
+    pagosVenta = []; renderFilasPago();
+    renderInventario(); renderInvStats();
+  });
+};
+</script>
+</body>
+</html>
