@@ -383,6 +383,10 @@
     <div class="card" style="grid-column:1/-1;border-left:5px solid var(--success)">
       <h2>💵 Caja — Disponible en Efectivo</h2>
       <div id="caja-efectivo-stats" style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:16px"></div>
+      <div style="background:#1a7f4b;border-radius:8px;padding:12px 18px;display:inline-block;margin-bottom:12px">
+        <div style="color:#a8d5b5;font-size:11px;font-weight:bold;">&#128200; TOTAL EFECTIVO (3 negocios)</div>
+        <div id="total-efectivo-global" style="color:#fff;font-size:22px;font-weight:bold;">...</div>
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
         <div>
           <div style="font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;margin-bottom:8px">📥 Entradas en Efectivo</div>
@@ -1402,6 +1406,11 @@ function renderCaja() {
   var hES = ef.salidas.map(function(s){  return '<tr><td>'+s.fecha+'</td><td>'+s.concepto+'</td><td style="color:var(--danger);font-weight:700">−'+fmt(s.valor)+'</td></tr>'; }).join('');
   el('caja-efectivo-entradas').innerHTML = hEE || '<tr><td colspan="3" style="text-align:center;color:var(--muted)">Sin entradas en efectivo</td></tr>';
   el('caja-efectivo-salidas').innerHTML  = hES || '<tr><td colspan="3" style="text-align:center;color:var(--muted)">Sin gastos en efectivo</td></tr>';
+  // Guardar efectivo y calcular total
+  fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({efectivo_actual:efD})});
+  var _urls=['https://web-production-b8d23.up.railway.app/api/efectivo','https://clientes-online.onrender.com/api/efectivo'];
+  Promise.all(_urls.map(function(u){return fetch(u).then(function(r){return r.json();}).catch(function(){return {efectivo:0};});}))
+  .then(function(res){var tot=efD+res.reduce(function(s,r){return s+(r.efectivo||0);},0);el('total-efectivo-global').textContent='$'+Number(tot).toLocaleString('es-CO');});
 
   // ── OTROS MÉTODOS ───────────────────────────────────────────
   var otrosKeys = Object.keys(metodos).filter(function(k){ return k !== 'Efectivo'; }).sort();

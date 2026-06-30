@@ -73,9 +73,19 @@ else:
         conn.commit(); conn.close()
 
 
+def _cors(response):
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    return response
+
 @app.route('/')
 def index():
     return send_file('index.html')
+
+@app.route('/api/efectivo')
+def efectivo():
+    val = db_load_all().get('efectivo_actual', 0)
+    r = jsonify({'efectivo': val})
+    return _cors(r)
 
 @app.route('/api/load')
 def load():
