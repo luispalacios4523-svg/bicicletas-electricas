@@ -112,7 +112,13 @@ function leerArchivo(tipo, input) {
   reader.onload = function(e) {
     var wb = XLSX.read(e.target.result, {type:'array', cellDates:false});
     var ws = wb.Sheets[wb.SheetNames[0]];
-    var rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+    var rawRows = XLSX.utils.sheet_to_json(ws, {defval:''});
+    // Normalizar claves: quitar espacios extra
+    var rows = rawRows.map(function(r) {
+      var clean = {};
+      Object.keys(r).forEach(function(k){ clean[k.trim()] = r[k]; });
+      return clean;
+    });
     if (tipo==='prod') procesarProductos(rows);
     else if (tipo==='ven') procesarVentas(rows);
     else procesarGastos(rows);
