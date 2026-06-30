@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Importar FileMaker → Bicicletas</title>
+<style>
+  body { font-family: Arial, sans-serif; background:#0f172a; color:#e2e8f0; padding:24px; max-width:800px; margin:0 auto; }
+  h1 { color:#38bdf8; }
+  h2 { color:#7dd3fc; margin-top:32px; }
+  .card { background:#1e293b; border-radius:10px; padding:20px; margin:16px 0; }
+  label { display:block; margin-bottom:6px; color:#94a3b8; font-size:13px; font-weight:bold; }
+  input[type=file] { background:#0f172a; border:1px solid #334155; border-radius:6px; padding:10px; color:#e2e8f0; width:100%; box-sizing:border-box; }
+  button { background:#0ea5e9; color:#fff; border:none; border-radius:6px; padding:12px 28px; font-size:15px; cursor:pointer; margin-top:12px; }
+  button:hover { background:#0284c7; }
+  button:disabled { background:#334155; cursor:not-allowed; }
+  .log { background:#0f172a; border-radius:6px; padding:14px; margin-top:12px; font-size:13px; line-height:1.8; max-height:200px; overflow-y:auto; }
+  .ok  { color:#4ade80; }
+  .err { color:#f87171; }
+  .info{ color:#fbbf24; }
+  .sep { border-top:1px solid #334155; margin:8px 0; }
+</style>
+</head>
+<body>
+<h1>📥 Importar desde FileMaker</h1>
+<p style="color:#94a3b8">Importa tus datos exportados de FileMaker a la App de Bicicletas Eléctricas. Cada sección es independiente.</p>
+
+<!-- PRODUCTOS -->
+<div class="card">
+  <h2>📦 Entrada de Productos</h2>
+  <p style="color:#94a3b8;font-size:13px">Columnas requeridas: <code>fecha, SKU, nombre producto, cantidad, vu, valor fob, Proveedor, N° factura, categoria</code></p>
+  <label>Archivo Excel (.xlsx) exportado de FileMaker</label>
+  <input type="file" id="file-prod" accept=".xlsx,.xls,.csv">
+  <button onclick="importarProductos()">Importar Productos</button>
+  <div class="log" id="log-prod">Esperando archivo...</div>
+</div>
+
+<!-- VENTAS -->
+<div class="card">
+  <h2>💰 Ventas</h2>
+  <p style="color:#94a3b8;font-size:13px">Columnas requeridas: <code>nombre cliente, telefono, fecha, SKU, PRODUCTO, Cantidad, valor, forma de pago, canal de venta, abono</code></p>
+  <label>Archivo Excel (.xlsx) exportado de FileMaker</label>
+  <input type="file" id="file-ventas" accept=".xlsx,.xls,.csv">
+  <button onclick="importarVentas()">Importar Ventas</button>
+  <div class="log" id="log-ventas">Esperando archivo...</div>
+</div>
+
+<!-- GASTOS -->
+<div class="card">
+  <h2>💸 Gastos</h2>
+  <p style="color:#94a3b8;font-size:13px">Columnas requeridas: <code>fecha, valor, concepto, Forma de pago</code></p>
+  <label>Archivo Excel (.xlsx) exportado de FileMaker</label>
+  <input type="file" id="file-gastos" accept=".xlsx,.xls,.csv">
+  <button onclick="importarGastos()">Importar Gastos</button>
+  <div class="log" id="log-gastos">Esperando archivo...</div>
+</div>
+
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script>
+function log(id, msg, tipo) {
+  var d = document.getElementById(id);
+  var cls = tipo||'info';
+  d.innerHTML += '<div class="'+cls+'">'+msg+'</div>';
+  d.scrollTop = d.scrollHeight;
+}
+function clearLog(id) { document.getElementById(id).innerHTML = ''; }
+
+function leerExcel(file, cb) {
+  var r = new FileReader();
+  r.onload = function(e) {
+    var wb = XLSX.read(e.target.result, {type:'array', cellDates:true});
+    var ws = wb.Sheets[wb.SheetNames[0]];
+    var rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+    cb(rows);
+  };
+  r.readAsArrayBuffer(file);
+}
+
+function fmtFecha(val) {
+  if (!val) return '';
+  if (val instanceof Date) {
+    var y=val.getFullYear(), m=String(val.getMonth()+1).padStart(2,'0'), d=String(val.getDate()).padStart(2,'0');
+    return y+'-'+m+'-'+d;
+  }
+  // string dd/mm/yyyy
+  var s = String(val).trim();
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) {
+    var p=s.split('/'); return p[2]+'-'+p[1]+'-'+p[0];
+  }
+  return s;
+}
+
+function num(v) { return parseFloat(String(v).replace(/[^0-9.-]/g,''))||0; }
+
+// ── PRODUCTOS ──────────────────────────────────────────────────────
+function importarProductos() {
+  var f = document.getElementById('file-prod').files[0];
+  if (!f) { alert('Selecciona un archivo'); return; }
+  clearLog('log-prod');
+  log('log-prod','Leyendo archivo...','info');
+
+  leerExcel(f, function(rows) {
+    var ok=0, skip=0;
+    var productos = [], inventario = {};
+
+    // Cargar datos actuales
+    fetch('/api/load').then(function(r){return r.json();}).then(function(data){
+      productos = data['bec_prod'] || [];
+      inventario = data['bec_inv'] || {};
+
+      rows.forEach(function(row, i) {
+        var fecha   = fmtFecha(row['fecha'] || row['Fecha'] || row['FECHA']);
+        var sku     = String(row['SKU'] || row['sku'] || '').trim().toUpperCase();
+        var nombre  = String(row['nombre producto'] || row['Nombre Producto'] || row['NOMBRE PRODUCTO'] || '').trim();
+        var cant    = num(row['cantidad'] || row['Cantidad']);
+        var vu      = num(row['vu'] || row['VU'] || row['valor unitario']);
+        var fob     = num(row['valor fob'] || row['Valor Fob'] || row['VALOR FOB']);
+        var prov    = String(row['Proveedor'] || row['proveedor'] || '').trim();
+        var factura = String(row['N° factura'] || row['factura'] || row['N factura'] || '').trim();
+        var cat     = String(row['categoria'] || row['Categoria'] || row['CATEGORIA'] || '').trim();
+
+        if (!sku || !nombre || !cant || !vu) { skip++; return; }
+
+        var entry = {
+          id: Date.now() + i,
+          fecha: fecha, proveedor: prov, factura: factura,
+          sku: sku, nombre: nombre, categoria: cat,
+          cantidad: cant, valor: vu, total: cant * vu, pventa: fob
+        };
+        productos.push(entry);
+
+        if (!inventario[sku]) inventario[sku] = { nombre:nombre, categoria:cat, stock:0, precioCompra:0, precioVenta:0 };
+        inventario[sku].stock += cant;
+        inventario[sku].precioCompra = vu;
+        inventario[sku].nombre = nombre;
+        inventario[sku].categoria = cat;
+        if (fob) inventario[sku].precioVenta = fob;
+        ok++;
+        log('log-prod','✔ '+sku+' — '+nombre+' ('+cant+' uds @ $'+vu.toLocaleString('es-CO')+')','ok');
+      });
+
+      if (ok === 0) { log('log-prod','⚠ No se encontraron filas válidas. Revisa los nombres de columnas.','err'); return; }
+
+      fetch('/api/save', {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({'bec_prod': productos, 'bec_inv': inventario})
+      }).then(function(r){return r.json();}).then(function(res){
+        log('log-prod','─────────────────','info');
+        log('log-prod','✅ Importados: '+ok+' productos  |  Omitidos: '+skip,'ok');
+      }).catch(function(e){ log('log-prod','❌ Error guardando: '+e,'err'); });
+    });
+  });
+}
+
+// ── VENTAS ─────────────────────────────────────────────────────────
+function importarVentas() {
+  var f = document.getElementById('file-ventas').files[0];
+  if (!f) { alert('Selecciona un archivo'); return; }
+  clearLog('log-ventas');
+  log('log-ventas','Leyendo archivo...','info');
+
+  leerExcel(f, function(rows) {
+    var ok=0, skip=0;
+    fetch('/api/load').then(function(r){return r.json();}).then(function(data){
+      var ventas = data['bec_ventas'] || [];
+      var ventasMap = {}; // para agrupar abonos
+
+      // Primera pasada: agrupar filas por cliente+SKU+fecha
+      rows.forEach(function(row, i) {
+        var nombre  = String(row['nombre cliente'] || row['Nombre Cliente'] || '').trim();
+        var fecha   = fmtFecha(row['fecha'] || row['Fecha']);
+        var sku     = String(row['SKU'] || row['sku'] || '').trim().toUpperCase();
+        var producto= String(row['PRODUCTO'] || row['producto'] || '').trim();
+        var cant    = num(row['Cantidad'] || row['cantidad']);
+        var valor   = num(row['valor'] || row['Valor']);
+        var formaPago = String(row['forma de pago'] || row['Forma de pago'] || '').trim();
+        var canal   = String(row['canal de venta'] || row['Canal de venta'] || '').trim();
+        var abono   = num(row['abono'] || row['Abono']);
+        var tel     = String(row['telefono'] || row['Telefono'] || '').trim();
+        var dir     = String(row['direccion'] || row['Direccion'] || '').trim();
+
+        // fila de abono adicional (sin nombre = segunda cuota)
+        if (!nombre && abono > 0) {
+          // buscar la última venta registrada para añadir abono
+          var keys = Object.keys(ventasMap);
+          if (keys.length > 0) {
+            var lastKey = keys[keys.length-1];
+            var fechaAbono = fmtFecha(row['fecha'] || row['Fecha']) || ventasMap[lastKey].fecha;
+            ventasMap[lastKey].abonos.push({ fecha: fechaAbono, valor: abono, forma: formaPago||'Efectivo' });
+            ventasMap[lastKey].abono += abono;
+          }
+          return;
+        }
+
+        if (!nombre || !sku || !valor) { skip++; return; }
+
+        var key = nombre + '|' + sku + '|' + fecha;
+        if (!ventasMap[key]) {
+          var total = valor * (cant||1);
+          ventasMap[key] = {
+            id: Date.now() + i,
+            fecha: fecha, nombre: nombre,
+            direccion: dir, ciudad: '', telefono: tel, correo: '',
+            canal: canal, sku: sku, producto: producto,
+            cantidad: cant||1, valor: valor,
+            ivaPct: 0, ivaVal: 0,
+            total: total, tipo: '',
+            pagos: abono > 0 ? [{ forma: formaPago||'Efectivo', valor: abono }] : [],
+            abono: abono, saldo: 0,
+            factura: '', obs: '', abonos: []
+          };
+        }
+      });
+
+      // Calcular saldo y tipo
+      Object.values(ventasMap).forEach(function(v) {
+        v.saldo = Math.max(0, v.total - v.abono);
+        v.tipo  = v.saldo > 1 ? 'Crédito' : 'Contado';
+        ventas.push(v);
+        ok++;
+        log('log-ventas','✔ '+v.fecha+' — '+v.nombre+' | '+v.sku+' $'+v.total.toLocaleString('es-CO')+' (saldo: $'+v.saldo.toLocaleString('es-CO')+')','ok');
+      });
+
+      if (ok === 0) { log('log-ventas','⚠ No se encontraron filas válidas.','err'); return; }
+
+      fetch('/api/save', {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({'bec_ventas': ventas})
+      }).then(function(r){return r.json();}).then(function(){
+        log('log-ventas','─────────────────','info');
+        log('log-ventas','✅ Importadas: '+ok+' ventas  |  Omitidas: '+skip,'ok');
+      }).catch(function(e){ log('log-ventas','❌ Error guardando: '+e,'err'); });
+    });
+  });
+}
+
+// ── GASTOS ─────────────────────────────────────────────────────────
+function importarGastos() {
+  var f = document.getElementById('file-gastos').files[0];
+  if (!f) { alert('Selecciona un archivo'); return; }
+  clearLog('log-gastos');
+  log('log-gastos','Leyendo archivo...','info');
+
+  leerExcel(f, function(rows) {
+    var ok=0, skip=0;
+    fetch('/api/load').then(function(r){return r.json();}).then(function(data){
+      var gastos = data['bec_gastos'] || [];
+
+      rows.forEach(function(row, i) {
+        var fecha    = fmtFecha(row['fecha'] || row['Fecha'] || row['FECHA']);
+        var valor    = num(row['valor'] || row['Valor'] || row['VALOR']);
+        var concepto = String(row['concepto'] || row['Concepto'] || row['CONCEPTO'] || '').trim();
+        var forma    = String(row['Forma de pago'] || row['forma de pago'] || row['FORMA DE PAGO'] || '').trim();
+
+        if (!concepto || !valor) { skip++; return; }
+
+        gastos.push({
+          id: Date.now() + i,
+          fecha: fecha, concepto: concepto,
+          categoria: '', valor: valor,
+          formapago: forma, comprobante: ''
+        });
+        ok++;
+        log('log-gastos','✔ '+fecha+' — '+concepto+' $'+valor.toLocaleString('es-CO'),'ok');
+      });
+
+      if (ok === 0) { log('log-gastos','⚠ No se encontraron filas válidas.','err'); return; }
+
+      fetch('/api/save', {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({'bec_gastos': gastos})
+      }).then(function(r){return r.json();}).then(function(){
+        log('log-gastos','─────────────────','info');
+        log('log-gastos','✅ Importados: '+ok+' gastos  |  Omitidos: '+skip,'ok');
+      }).catch(function(e){ log('log-gastos','❌ Error guardando: '+e,'err'); });
+    });
+  });
+}
+</script>
+</body>
+</html>

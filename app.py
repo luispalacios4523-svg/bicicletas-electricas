@@ -81,6 +81,10 @@ def _cors(response):
 def index():
     return send_file('index.html')
 
+@app.route('/importar')
+def importar():
+    return send_file('importar.html')
+
 @app.route('/api/efectivo')
 def efectivo():
     val = db_load_all().get('efectivo_actual', 0)
