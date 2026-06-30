@@ -145,7 +145,7 @@
       <button class="btn btn-primary btn-sm" onclick="exportarInventario()">⬇ Exportar CSV</button>
     </div>
     <div class="table-wrap"><table>
-      <thead><tr><th>SKU</th><th>Producto</th><th>Categoría</th><th>Stock</th><th>P. Compra</th><th>Total Inv.</th><th>P. Venta Sug.</th><th>Estado</th></tr></thead>
+      <thead><tr><th>SKU</th><th>Producto</th><th>Categoría</th><th>Stock</th><th>P. Compra</th><th>Total Inv.</th><th>Valor FOB</th><th>Estado</th></tr></thead>
       <tbody id="inv-body"></tbody>
     </table></div>
   </div>
@@ -172,7 +172,7 @@
       <div class="form-group"><label>Cantidad *</label><input type="number" id="p-cantidad" min="1" value="1" oninput="calcTotalProd()"></div>
       <div class="form-group"><label>Valor Unitario ($) *</label><input type="number" id="p-valor" min="0" placeholder="0" oninput="calcTotalProd()"></div>
       <div class="form-group"><label>Total ($)</label><input type="number" id="p-total" readonly class="info-field"></div>
-      <div class="form-group"><label>Precio Venta Sugerido ($)</label><input type="number" id="p-pventa" min="0" placeholder="0"></div>
+      <div class="form-group"><label>Valor FOB ($)</label><input type="number" id="p-pventa" min="0" placeholder="0"></div>
     </div>
     <div class="btn-row">
       <button class="btn btn-primary" onclick="guardarProducto()">💾 Guardar Entrada</button>
