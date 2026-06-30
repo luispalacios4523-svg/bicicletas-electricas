@@ -1501,6 +1501,15 @@ window.onload = function() {
     renderInventario(); renderInvStats();
   });
 };
+setInterval(function(){
+  var _urls=['https://web-production-b8d23.up.railway.app/api/efectivo','https://clientes-online.onrender.com/api/efectivo'];
+  Promise.all(_urls.map(function(u){return fetch(u).then(function(r){return r.json();}).catch(function(){return {efectivo:0};});}))
+  .then(function(res){
+    var efActual=parseFloat((_cache&&_cache.efectivo_actual)||0)||0;
+    var tot=efActual+res.reduce(function(s,r){return s+(r.efectivo||0);},0);
+    var elT=el('total-efectivo-global');if(elT)elT.textContent='$'+Number(tot).toLocaleString('es-CO');
+  });
+},30000);
 </script>
 </body>
 </html>
