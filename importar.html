@@ -159,7 +159,7 @@ function procesarProductos(rows) {
 
 /* ── VENTAS ── */
 function procesarVentas(rows) {
-  var map = {}, order = [];
+  var ventas = [], ultimaVenta = null;
   rows.forEach(function(r, i) {
     var nombre = String(r['nombre cliente']||r['Nombre cliente']||'').trim();
     var fecha = fmtFecha(r['fecha']||r['Fecha']);
@@ -173,39 +173,39 @@ function procesarVentas(rows) {
     var dir = String(r['direccion']||r['Dirección']||'').trim();
     var tel = String(r['telefono']||r['Teléfono']||'').trim();
     var email = String(r['email']||r['Email']||'').trim();
-    if (!fecha || abono === 0) return;
-    var key = nombre + '||' + fecha + '||' + sku;
-    if (!map[key]) {
-      map[key] = {
-        id: Date.now()+i, fecha:fecha, nombre:nombre,
-        direccion:dir, ciudad:'', telefono:tel, correo:email,
-        canal:canal, sku:sku, producto:producto,
-        cantidad:cant, valor:valor, ivaPct:0, ivaVal:0,
-        total:valor*cant||valor, tipo:'Contado',
-        pagos:[], abono:0, saldo:0, factura:'', obs:'', abonos:[]
-      };
-      order.push(key);
+    if (abono === 0) return;
+    // Fila con nombre en blanco = abono adicional a la venta anterior
+    if (!nombre && ultimaVenta) {
+      ultimaVenta.pagos.push({metodo:forma, valor:abono});
+      ultimaVenta.abono += abono;
+      return;
     }
-    if (abono > 0) {
-      map[key].pagos.push({metodo:forma, valor:abono});
-      map[key].abono += abono;
-    }
+    if (!nombre || !fecha) return;
+    var v = {
+      id: Date.now()+i, fecha:fecha, nombre:nombre,
+      direccion:dir, ciudad:'', telefono:tel, correo:email,
+      canal:canal, sku:sku, producto:producto,
+      cantidad:cant, valor:valor, ivaPct:0, ivaVal:0,
+      total:valor*cant||valor, tipo:'Contado',
+      pagos:[{metodo:forma, valor:abono}], abono:abono, saldo:0,
+      factura:'', obs:'', abonos:[]
+    };
+    ventas.push(v);
+    ultimaVenta = v;
   });
-  var ventas = order.map(function(k){
-    var v = map[k];
+  ventas.forEach(function(v){
     if (!v.total && v.abono) v.total = v.abono;
     v.saldo = Math.max(0, v.total - v.abono);
     if (v.saldo > 0) v.tipo = 'Crédito';
-    return v;
   });
   datos.ven = ventas;
   var html = '<div class="count">'+ventas.length+' ventas encontradas</div><div class="preview"><table><thead><tr><th>Fecha</th><th>Cliente</th><th>Producto</th><th>Total</th><th>Abonos</th><th>Saldo</th><th>Tipo</th></tr></thead><tbody>';
-  ventas.slice(0,5).forEach(function(v){
+  ventas.slice(0,8).forEach(function(v){
     var pStr = v.pagos.map(function(p){return p.metodo+': $'+p.valor.toLocaleString('es-CO');}).join('<br>');
     var badge = v.saldo>0 ? '<span class="badge badge-warn">Crédito</span>' : '<span class="badge badge-ok">Contado</span>';
     html += '<tr><td>'+v.fecha+'</td><td>'+v.nombre+'</td><td>'+v.producto+'</td><td>$'+v.total.toLocaleString('es-CO')+'</td><td>'+pStr+'</td><td>$'+v.saldo.toLocaleString('es-CO')+'</td><td>'+badge+'</td></tr>';
   });
-  if (ventas.length>5) html += '<tr><td colspan="7" style="color:#888;font-style:italic">... y '+(ventas.length-5)+' más</td></tr>';
+  if (ventas.length>8) html += '<tr><td colspan="7" style="color:#888;font-style:italic">... y '+(ventas.length-8)+' más</td></tr>';
   html += '</tbody></table></div>';
   document.getElementById('prev-ven').innerHTML = html;
 }
