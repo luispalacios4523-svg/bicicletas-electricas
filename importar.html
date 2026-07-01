@@ -120,7 +120,23 @@ function leerArchivo(tipo, input) {
       return clean;
     });
     if (tipo==='prod') procesarProductos(rows);
-    else if (tipo==='ven') procesarVentas(ws);
+    else if (tipo==='ven') {
+      try {
+        var allR = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+        var dbgEl = document.getElementById('prev-ven');
+        dbgEl.innerHTML = '<pre style="background:#111;color:#0f0;padding:10px;font-size:11px;border-radius:6px;white-space:pre-wrap;word-break:break-all">'+
+          'Hojas: '+wb.SheetNames.join(', ')+'\n'+
+          'Filas leidas: '+allR.length+'\n'+
+          'Fila 0: '+JSON.stringify(allR[0])+'\n'+
+          'Fila 1: '+JSON.stringify(allR[1])+'\n'+
+          'Fila 2: '+JSON.stringify(allR[2])+'\n'+
+          'Fila 3: '+JSON.stringify(allR[3])+'\n'+
+          'Fila 4: '+JSON.stringify(allR[4])+'</pre>';
+        procesarVentas(ws);
+      } catch(e) {
+        document.getElementById('prev-ven').innerHTML = '<div style="color:red;padding:10px;font-weight:bold">ERROR: '+e.message+'</div>';
+      }
+    }
     else procesarGastos(rows);
     actualizarResumen();
   };
