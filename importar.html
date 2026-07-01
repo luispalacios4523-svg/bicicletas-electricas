@@ -179,11 +179,12 @@ function procesarVentas(rows) {
     var dir = String(r['direccion']||r['Dirección']||'').trim();
     var tel = String(r['telefono']||r['Teléfono']||'').trim();
     var email = String(r['email']||r['Email']||'').trim();
-    if (abono === 0) return;
+    // Si abono está vacío pero hay valor, usar valor como pago
+    var pago = abono > 0 ? abono : valor;
     // Fila con nombre en blanco = abono adicional a la venta anterior
-    if (!nombre && ultimaVenta) {
-      ultimaVenta.pagos.push({metodo:forma, valor:abono});
-      ultimaVenta.abono += abono;
+    if (!nombre && ultimaVenta && pago > 0) {
+      ultimaVenta.pagos.push({metodo:forma, valor:pago});
+      ultimaVenta.abono += pago;
       return;
     }
     if (!nombre || !fecha) return;
@@ -193,8 +194,8 @@ function procesarVentas(rows) {
       canal:canal, sku:sku, producto:producto,
       cantidad:cant, valor:valor, ivaPct:0, ivaVal:0,
       total:valor*cant||valor, tipo:'Contado',
-      pagos:[{metodo:forma, valor:abono}], abono:abono, saldo:0,
-      factura:'', obs:'', abonos:[]
+      pagos: pago>0 ? [{metodo:forma, valor:pago}] : [],
+      abono:pago, saldo:0, factura:'', obs:'', abonos:[]
     };
     ventas.push(v);
     ultimaVenta = v;
