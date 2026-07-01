@@ -123,6 +123,7 @@
 <header>
   <div class="logo">⚡</div>
   <div style="flex:1"><h1>Bicicletas Eléctricas</h1><span>Sistema de Gestión Comercial</span></div>
+  <button onclick="borrarVentasGastos()" style="background:rgba(255,165,0,0.25);border:1px solid rgba(255,165,0,0.6);color:white;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;margin-right:6px">🗑️ Borrar Ventas y Gastos</button>
   <button onclick="borrarTodosLosDatos()" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.4);color:white;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600">🗑️ Borrar todos los datos</button>
 </header>
 
@@ -1542,6 +1543,15 @@ function renderCaja() {
 // ================================================================
 // INIT
 // ================================================================
+function borrarVentasGastos() {
+  if (!confirm('¿Borrar todas las ventas y gastos?\n\nEl inventario y productos NO se tocarán.\n\nEsta acción NO se puede deshacer.')) return;
+  var payload = {};
+  payload[KEYS.ventas] = [];
+  payload[KEYS.gastos] = [];
+  fetch('/api/save', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) })
+    .then(function(){ alert('✅ Ventas y gastos eliminados.'); location.reload(); });
+}
+
 function borrarTodosLosDatos() {
   if (!confirm('⚠️ ¿Estás seguro de que quieres borrar TODOS los datos?\n\nSe eliminarán productos, ventas, gastos e inventario.\n\nEsta acción NO se puede deshacer.')) return;
   if (!confirm('Segunda confirmación: ¿Borrar todo definitivamente?')) return;
