@@ -119,16 +119,8 @@ function leerArchivo(tipo, input) {
       Object.keys(r).forEach(function(k){ clean[k.trim()] = r[k]; });
       return clean;
     });
-    if (tipo==='ven') {
-      var dbg = document.getElementById('debug-ven');
-      if (!dbg) { dbg=document.createElement('pre'); dbg.id='debug-ven'; dbg.style='background:#111;color:#0f0;padding:10px;font-size:11px;max-height:200px;overflow:auto;margin-top:10px'; document.getElementById('prev-ven').appendChild(dbg); }
-      dbg.textContent = 'Total filas leidas: '+rows.length+'\n'+
-        'Claves fila 1: '+JSON.stringify(Object.keys(rows[0]||{}))+'\n'+
-        'Fila 1: '+JSON.stringify(rows[0])+'\n'+
-        'Fila 2: '+JSON.stringify(rows[1]);
-    }
     if (tipo==='prod') procesarProductos(rows);
-    else if (tipo==='ven') procesarVentas(rows);
+    else if (tipo==='ven') procesarVentas(ws);
     else procesarGastos(rows);
     actualizarResumen();
   };
@@ -172,32 +164,49 @@ function procesarProductos(rows) {
 }
 
 /* ── VENTAS ── */
-function procesarVentas(rows) {
+function procesarVentas(ws) {
+  // Leer todas las filas como arrays para manejar filas vacías al inicio
+  var allRows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+
+  // Encontrar la fila de encabezado (primera fila con contenido)
+  var headerIdx = -1, headers = [];
+  for (var i = 0; i < allRows.length; i++) {
+    var row = allRows[i];
+    var filled = row.filter(function(c){ return String(c).trim() !== ''; });
+    if (filled.length >= 3) { headerIdx = i; headers = row.map(function(c){ return String(c).trim().toLowerCase(); }); break; }
+  }
+  if (headerIdx < 0) { document.getElementById('prev-ven').innerHTML='<div style="color:red;padding:10px">No se encontró encabezado</div>'; return; }
+
+  function col(row, name) {
+    var idx = headers.indexOf(name);
+    return idx >= 0 ? String(row[idx]||'').trim() : '';
+  }
+
   var ventas = [], ultimaVenta = null;
-  rows.forEach(function(r, i) {
-    var nombre = String(r['nombre cliente']||r['Nombre cliente']||'').trim();
-    var fecha = fmtFecha(r['fecha']||r['Fecha']);
-    var sku = String(r['SKU']||r['sku']||'').trim().toUpperCase();
-    var producto = String(r['PRODUCTO']||r['Producto']||r['producto']||'').trim();
-    var cant = parseInt(r['Cantidad']||r['cantidad'])||1;
-    var valor = num(r['valor']||r['Valor']||0);
-    var forma = String(r['forma de pago']||r['Forma de pago']||'Efectivo').trim();
-    var canal = String(r['canal de venta']||r['Canal de venta']||'').trim();
-    var abono = num(r['abono']||r['Abono']||0);
-    var dir = String(r['direccion']||r['Dirección']||'').trim();
-    var tel = String(r['telefono']||r['Teléfono']||'').trim();
-    var email = String(r['email']||r['Email']||'').trim();
-    // Si abono está vacío pero hay valor, usar valor como pago
-    var pago = abono > 0 ? abono : valor;
-    // Fila con nombre en blanco = abono adicional a la venta anterior
+  for (var r = headerIdx+1; r < allRows.length; r++) {
+    var row = allRows[r];
+    var nombre = col(row,'nombre cliente');
+    var fecha  = fmtFecha(col(row,'fecha'));
+    var sku    = col(row,'sku').toUpperCase();
+    var producto = col(row,'producto');
+    var cant   = parseInt(col(row,'cantidad'))||1;
+    var valor  = num(col(row,'valor'));
+    var forma  = col(row,'forma de pago')||'Efectivo';
+    var canal  = col(row,'canal de venta');
+    var abono  = num(col(row,'abono'));
+    var dir    = col(row,'direccion');
+    var tel    = col(row,'telefono');
+    var email  = col(row,'email');
+    var pago   = abono > 0 ? abono : valor;
+    if (!nombre && !fecha && !valor && !abono) continue; // fila vacía
     if (!nombre && ultimaVenta && pago > 0) {
       ultimaVenta.pagos.push({metodo:forma, valor:pago});
       ultimaVenta.abono += pago;
-      return;
+      continue;
     }
-    if (!nombre || !fecha) return;
+    if (!nombre || !fecha) continue;
     var v = {
-      id: Date.now()+i, fecha:fecha, nombre:nombre,
+      id: Date.now()+r, fecha:fecha, nombre:nombre,
       direccion:dir, ciudad:'', telefono:tel, correo:email,
       canal:canal, sku:sku, producto:producto,
       cantidad:cant, valor:valor, ivaPct:0, ivaVal:0,
@@ -207,7 +216,7 @@ function procesarVentas(rows) {
     };
     ventas.push(v);
     ultimaVenta = v;
-  });
+  }
   ventas.forEach(function(v){
     if (!v.total && v.abono) v.total = v.abono;
     v.saldo = Math.max(0, v.total - v.abono);
