@@ -120,23 +120,7 @@ function leerArchivo(tipo, input) {
       return clean;
     });
     if (tipo==='prod') procesarProductos(rows);
-    else if (tipo==='ven') {
-      try {
-        var allR = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
-        var dbgEl = document.getElementById('prev-ven');
-        dbgEl.innerHTML = '<pre style="background:#111;color:#0f0;padding:10px;font-size:11px;border-radius:6px;white-space:pre-wrap;word-break:break-all">'+
-          'Hojas: '+wb.SheetNames.join(', ')+'\n'+
-          'Filas leidas: '+allR.length+'\n'+
-          'Fila 0: '+JSON.stringify(allR[0])+'\n'+
-          'Fila 1: '+JSON.stringify(allR[1])+'\n'+
-          'Fila 2: '+JSON.stringify(allR[2])+'\n'+
-          'Fila 3: '+JSON.stringify(allR[3])+'\n'+
-          'Fila 4: '+JSON.stringify(allR[4])+'</pre>';
-        procesarVentas(ws);
-      } catch(e) {
-        document.getElementById('prev-ven').innerHTML = '<div style="color:red;padding:10px;font-weight:bold">ERROR: '+e.message+'</div>';
-      }
-    }
+    else if (tipo==='ven') procesarVentas(rows);
     else procesarGastos(rows);
     actualizarResumen();
   };
@@ -180,49 +164,32 @@ function procesarProductos(rows) {
 }
 
 /* ── VENTAS ── */
-function procesarVentas(ws) {
-  // Leer todas las filas como arrays para manejar filas vacías al inicio
-  var allRows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
-
-  // Encontrar la fila de encabezado (primera fila con contenido)
-  var headerIdx = -1, headers = [];
-  for (var i = 0; i < allRows.length; i++) {
-    var row = allRows[i];
-    var filled = row.filter(function(c){ return String(c).trim() !== ''; });
-    if (filled.length >= 3) { headerIdx = i; headers = row.map(function(c){ return String(c).trim().toLowerCase(); }); break; }
-  }
-  if (headerIdx < 0) { document.getElementById('prev-ven').innerHTML='<div style="color:red;padding:10px">No se encontró encabezado</div>'; return; }
-
-  function col(row, name) {
-    var idx = headers.indexOf(name);
-    return idx >= 0 ? String(row[idx]||'').trim() : '';
-  }
-
+function procesarVentas(rows) {
   var ventas = [], ultimaVenta = null;
-  for (var r = headerIdx+1; r < allRows.length; r++) {
-    var row = allRows[r];
-    var nombre = col(row,'nombre cliente');
-    var fecha  = fmtFecha(col(row,'fecha'));
-    var sku    = col(row,'sku').toUpperCase();
-    var producto = col(row,'producto');
-    var cant   = parseInt(col(row,'cantidad'))||1;
-    var valor  = num(col(row,'valor'));
-    var forma  = col(row,'forma de pago')||'Efectivo';
-    var canal  = col(row,'canal de venta');
-    var abono  = num(col(row,'abono'));
-    var dir    = col(row,'direccion');
-    var tel    = col(row,'telefono');
-    var email  = col(row,'email');
+  rows.forEach(function(r, i) {
+    // Buscar columnas con nombres flexibles
+    var nombre = String(r['nombre cliente']||r['nombre_cliente']||r['NOMBRE CLIENTE']||r['Nombre Cliente']||'').trim();
+    var fecha  = fmtFecha(r['fecha']||r['Fecha']||'');
+    var sku    = String(r['SKU']||r['sku']||r['Sku']||'').trim().toUpperCase();
+    var producto = String(r['PRODUCTO']||r['Producto']||r['producto']||'').trim();
+    var cant   = parseInt(r['Cantidad']||r['cantidad']||r['CANTIDAD']||1)||1;
+    var valor  = num(r['valor']||r['Valor']||r['VALOR']||0);
+    var forma  = String(r['forma de pago']||r['Forma de pago']||r['FORMA DE PAGO']||r['formapago']||'').trim()||'Efectivo';
+    var canal  = String(r['canal de venta']||r['Canal de venta']||r['CANAL DE VENTA']||'').trim();
+    var abono  = num(r['abono']||r['Abono']||r['ABONO']||0);
+    var dir    = String(r['direccion']||r['Dirección']||r['DIRECCION']||'').trim();
+    var tel    = String(r['telefono']||r['Teléfono']||r['TELEFONO']||'').trim();
+    var email  = String(r['email']||r['Email']||r['EMAIL']||'').trim();
     var pago   = abono > 0 ? abono : valor;
-    if (!nombre && !fecha && !valor && !abono) continue; // fila vacía
+    // Fila de abono adicional (nombre vacío)
     if (!nombre && ultimaVenta && pago > 0) {
       ultimaVenta.pagos.push({metodo:forma, valor:pago});
       ultimaVenta.abono += pago;
-      continue;
+      return;
     }
-    if (!nombre || !fecha) continue;
+    if (!nombre || !fecha) return;
     var v = {
-      id: Date.now()+r, fecha:fecha, nombre:nombre,
+      id: Date.now()+i, fecha:fecha, nombre:nombre,
       direccion:dir, ciudad:'', telefono:tel, correo:email,
       canal:canal, sku:sku, producto:producto,
       cantidad:cant, valor:valor, ivaPct:0, ivaVal:0,
@@ -232,7 +199,7 @@ function procesarVentas(ws) {
     };
     ventas.push(v);
     ultimaVenta = v;
-  }
+  });
   ventas.forEach(function(v){
     if (!v.total && v.abono) v.total = v.abono;
     v.saldo = Math.max(0, v.total - v.abono);
