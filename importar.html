@@ -119,6 +119,14 @@ function leerArchivo(tipo, input) {
       Object.keys(r).forEach(function(k){ clean[k.trim()] = r[k]; });
       return clean;
     });
+    if (tipo==='ven') {
+      var dbg = document.getElementById('debug-ven');
+      if (!dbg) { dbg=document.createElement('pre'); dbg.id='debug-ven'; dbg.style='background:#111;color:#0f0;padding:10px;font-size:11px;max-height:200px;overflow:auto;margin-top:10px'; document.getElementById('prev-ven').appendChild(dbg); }
+      dbg.textContent = 'Total filas leidas: '+rows.length+'\n'+
+        'Claves fila 1: '+JSON.stringify(Object.keys(rows[0]||{}))+'\n'+
+        'Fila 1: '+JSON.stringify(rows[0])+'\n'+
+        'Fila 2: '+JSON.stringify(rows[1]);
+    }
     if (tipo==='prod') procesarProductos(rows);
     else if (tipo==='ven') procesarVentas(rows);
     else procesarGastos(rows);
