@@ -929,6 +929,41 @@ function renderVentas() {
     el('ventas-resumen').style.display = 'none';
   }
 
+  // Totales por método de pago
+  var totMetodos = {};
+  list.forEach(function(v){
+    (v.pagos||[]).forEach(function(p){
+      var k = String(p.metodo||'Sin especificar').trim();
+      if (k.toLowerCase()==='efectivo') k='Efectivo';
+      totMetodos[k] = (totMetodos[k]||0) + (p.valor||0);
+    });
+    (v.abonos||[]).forEach(function(a){
+      var k = String(a.forma||'Sin especificar').trim();
+      if (k.toLowerCase()==='efectivo') k='Efectivo';
+      totMetodos[k] = (totMetodos[k]||0) + (a.valor||0);
+    });
+  });
+  var metKeys = Object.keys(totMetodos).sort();
+  var colores = {Efectivo:'#1a5c35',Nequi:'#6f42c1',Bancolombia:'#0d47a1',Addi:'#e67e22'};
+  var hmDiv = '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;padding:10px 14px;background:#f0faf3;border-radius:8px;border:1px solid #b2d8c3">';
+  hmDiv += '<span style="font-size:12px;font-weight:700;color:#555;align-self:center;margin-right:4px">💳 Recibido por forma de pago:</span>';
+  metKeys.forEach(function(k){
+    var col = colores[k] || '#555';
+    hmDiv += '<span style="background:'+col+';color:#fff;border-radius:6px;padding:5px 12px;font-size:13px;font-weight:700">'+k+': '+fmt(totMetodos[k])+'</span>';
+  });
+  hmDiv += '</div>';
+  el('ventas-resumen-metodos') ? el('ventas-resumen-metodos').outerHTML = hmDiv : null;
+  // insertar si no existe
+  var existente = document.getElementById('ventas-resumen-metodos');
+  if (!existente) {
+    var div = document.createElement('div');
+    div.id = 'ventas-resumen-metodos';
+    div.innerHTML = hmDiv;
+    el('ventas-body').parentNode.parentNode.insertBefore(div, el('ventas-body').parentNode.parentNode.firstChild);
+  } else {
+    existente.innerHTML = hmDiv;
+  }
+
   if (!list.length){ el('ventas-body').innerHTML='<tr><td colspan="12" style="text-align:center;color:var(--muted);padding:16px">Sin ventas que coincidan con la búsqueda</td></tr>'; return; }
   var h=''; list.forEach(function(v){
     var totalAb = (v.abono||0) + (v.abonos||[]).reduce(function(s,a){ return s+a.valor; },0);
