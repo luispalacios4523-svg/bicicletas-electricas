@@ -1375,16 +1375,22 @@ function renderCaja() {
   // Recopilar todos los métodos con movimientos
   var metodos = {};
 
+  function normMetodo(m) {
+    var s = String(m||'').trim();
+    if (s.toLowerCase() === 'efectivo') return 'Efectivo';
+    return s || 'Sin especificar';
+  }
+
   function addEntrada(metodo, fecha, concepto, valor) {
     valor = parseFloat(valor) || 0; if (!valor) return;
-    var k = metodo || 'Sin especificar';
+    var k = normMetodo(metodo);
     if (!metodos[k]) metodos[k] = { entradas: [], salidas: [] };
     metodos[k].entradas.push({ fecha: fecha, concepto: concepto, valor: valor });
   }
 
   function addSalida(metodo, fecha, concepto, valor) {
     valor = parseFloat(valor) || 0; if (!valor) return;
-    var k = metodo || 'Sin especificar';
+    var k = normMetodo(metodo);
     if (!metodos[k]) metodos[k] = { entradas: [], salidas: [] };
     metodos[k].salidas.push({ fecha: fecha, concepto: concepto, valor: valor });
   }
