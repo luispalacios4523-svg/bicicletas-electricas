@@ -163,24 +163,26 @@ function procesarProductos(rows) {
   document.getElementById('prev-prod').innerHTML = html;
 }
 
-/* ── VENTAS ── */
+/* ── VENTAS ── leer por posicion de columna (col 0=nombre,1=dir,2=tel,3=email,4=fecha,5=SKU,6=producto,7=cant,8=valor,9=forma,10=canal,11=abono) */
 function procesarVentas(rows) {
+  // Convertir rows (objetos) a arrays usando sheet_to_json con header:1 no disponible aqui
+  // Usar los objetos pero acceder por indice convirtiendo a array de valores
   var ventas = [], ultimaVenta = null;
   rows.forEach(function(r, i) {
-    // Buscar columnas con nombres flexibles
-    var nombre = String(r['nombre cliente']||r['nombre_cliente']||r['NOMBRE CLIENTE']||r['Nombre Cliente']||'').trim();
-    var fecha  = fmtFecha(r['fecha']||r['Fecha']||'');
-    var sku    = String(r['SKU']||r['sku']||r['Sku']||'').trim().toUpperCase();
-    var producto = String(r['PRODUCTO']||r['Producto']||r['producto']||'').trim();
-    var cant   = parseInt(r['Cantidad']||r['cantidad']||r['CANTIDAD']||1)||1;
-    var valor  = num(r['valor']||r['Valor']||r['VALOR']||0);
-    var forma  = String(r['forma de pago']||r['Forma de pago']||r['FORMA DE PAGO']||r['formapago']||'').trim()||'Efectivo';
-    var canal  = String(r['canal de venta']||r['Canal de venta']||r['CANAL DE VENTA']||'').trim();
-    var abono  = num(r['abono']||r['Abono']||r['ABONO']||0);
-    var dir    = String(r['direccion']||r['Dirección']||r['DIRECCION']||'').trim();
-    var tel    = String(r['telefono']||r['Teléfono']||r['TELEFONO']||'').trim();
-    var email  = String(r['email']||r['Email']||r['EMAIL']||'').trim();
-    var pago   = abono > 0 ? abono : valor;
+    var vals = Object.values(r); // [nombre, dir, tel, email, fecha, sku, producto, cant, valor, forma, canal, abono]
+    var nombre  = String(vals[0]||'').trim();
+    var dir     = String(vals[1]||'').trim();
+    var tel     = String(vals[2]||'').trim();
+    var email   = String(vals[3]||'').trim();
+    var fecha   = fmtFecha(vals[4]||'');
+    var sku     = String(vals[5]||'').trim().toUpperCase();
+    var producto= String(vals[6]||'').trim();
+    var cant    = parseInt(vals[7])||1;
+    var valor   = num(vals[8]||0);
+    var forma   = String(vals[9]||'').trim()||'Efectivo';
+    var canal   = String(vals[10]||'').trim();
+    var abono   = num(vals[11]||0);
+    var pago    = abono > 0 ? abono : valor;
     // Fila de abono adicional (nombre vacío)
     if (!nombre && ultimaVenta && pago > 0) {
       ultimaVenta.pagos.push({metodo:forma, valor:pago});
