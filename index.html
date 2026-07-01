@@ -191,6 +191,7 @@
 
 <!-- ===== VENTAS ===== -->
 <div id="page-ventas" class="page">
+  <div class="stats-grid" id="ventas-stats"></div>
   <div class="card">
     <h2>🛒 Registro de Venta</h2>
     <div id="venta-alert"></div>
@@ -580,7 +581,7 @@ function showPage(page, tab) {
   el('page-'+page).classList.add('active');
   tab.classList.add('active');
   if (page==='inventario') { renderInventario(); renderInvStats(); }
-  if (page==='ventas')     { renderVentas(); }
+  if (page==='ventas')     { renderVentas(); renderVentasStats(); }
   if (page==='cartera')    { renderCartera(); renderCarteraStats(); }
   if (page==='gastos')     { renderGastos(); }
   if (page==='reportes')   { renderReportes(); }
@@ -1176,6 +1177,25 @@ function guardarEdicionVenta() {
 }
 
 // ================================================================
+// ── STATS VENTAS ──
+function _totalRecibido(ventas) {
+  return ventas.reduce(function(s,v){
+    if (v.tipo==='Crédito') return s+(v.abono||0)+(v.abonos||[]).reduce(function(x,a){ return x+a.valor; },0);
+    return s+v.total;
+  },0);
+}
+function renderVentasStats() {
+  var ventas=DB.get(KEYS.ventas);
+  var tv=ventas.reduce(function(s,v){ return s+v.total; },0);
+  var tr=_totalRecibido(ventas);
+  var pend=tv-tr;
+  el('ventas-stats').innerHTML=
+    '<div class="stat-card"><div class="stat-label">N° Ventas</div><div class="stat-value">'+ventas.length+'</div></div>'+
+    '<div class="stat-card blue"><div class="stat-label">Total Facturado</div><div class="stat-value">'+fmt(tv)+'</div></div>'+
+    '<div class="stat-card accent"><div class="stat-label">💰 Total Recibido</div><div class="stat-value">'+fmt(tr)+'</div></div>'+
+    '<div class="stat-card danger"><div class="stat-label">Saldo Pendiente</div><div class="stat-value">'+fmt(Math.max(0,pend))+'</div></div>';
+}
+
 // CARTERA
 // ================================================================
 var abonoVentaId = null;
@@ -1185,12 +1205,14 @@ function renderCarteraStats() {
   var total=0, abonado=0;
   ventas.forEach(function(v){ total+=v.total; abonado+=(v.abono||0)+(v.abonos||[]).reduce(function(s,a){ return s+a.valor; },0); });
   var pend = Math.max(0,total-abonado);
-  var pagas = ventas.filter(function(v){ var ab=(v.abono||0)+(v.abonos||[]).reduce(function(s,a){ return s+a.valor; },0); return ab>=v.total; }).length;
+  var todasVentas=DB.get(KEYS.ventas);
+  var trTotal=_totalRecibido(todasVentas);
   el('cartera-stats').innerHTML =
     '<div class="stat-card"><div class="stat-label">Total Créditos</div><div class="stat-value">'+ventas.length+'</div></div>'+
-    '<div class="stat-card blue"><div class="stat-label">Total Facturado</div><div class="stat-value">'+fmt(total)+'</div></div>'+
-    '<div class="stat-card accent"><div class="stat-label">Total Abonado</div><div class="stat-value">'+fmt(abonado)+'</div></div>'+
-    '<div class="stat-card danger"><div class="stat-label">Saldo Pendiente</div><div class="stat-value">'+fmt(pend)+'</div></div>';
+    '<div class="stat-card blue"><div class="stat-label">Facturado (créditos)</div><div class="stat-value">'+fmt(total)+'</div></div>'+
+    '<div class="stat-card accent"><div class="stat-label">Abonado (créditos)</div><div class="stat-value">'+fmt(abonado)+'</div></div>'+
+    '<div class="stat-card danger"><div class="stat-label">Saldo Pendiente</div><div class="stat-value">'+fmt(pend)+'</div></div>'+
+    '<div class="stat-card" style="border-left-color:#f39c12"><div class="stat-label">💰 Total Recibido (todas)</div><div class="stat-value">'+fmt(trTotal)+'</div></div>';
 }
 
 function renderCartera() {
@@ -1316,11 +1338,13 @@ function renderReportes() {
   var pend=ventas.filter(function(v){ return v.tipo==='Crédito'; }).reduce(function(s,v){
     var ab=(v.abono||0)+(v.abonos||[]).reduce(function(x,a){ return x+a.valor; },0); return s+Math.max(0,v.total-ab);
   },0);
+  var tr=_totalRecibido(ventas);
   el('rep-stats').innerHTML=
-    '<div class="stat-card"><div class="stat-label">Total Ventas</div><div class="stat-value">'+fmt(tv)+'</div></div>'+
+    '<div class="stat-card blue"><div class="stat-label">Total Facturado</div><div class="stat-value">'+fmt(tv)+'</div></div>'+
+    '<div class="stat-card accent"><div class="stat-label">💰 Total Recibido</div><div class="stat-value">'+fmt(tr)+'</div></div>'+
     '<div class="stat-card danger"><div class="stat-label">Total Gastos</div><div class="stat-value">'+fmt(tg)+'</div></div>'+
-    '<div class="stat-card accent"><div class="stat-label">Utilidad Bruta</div><div class="stat-value">'+fmt(tv-tg)+'</div></div>'+
-    '<div class="stat-card blue"><div class="stat-label">Cartera Pendiente</div><div class="stat-value">'+fmt(pend)+'</div></div>';
+    '<div class="stat-card"><div class="stat-label">Utilidad Bruta</div><div class="stat-value">'+fmt(tr-tg)+'</div></div>'+
+    '<div class="stat-card" style="border-left-color:#e74c3c"><div class="stat-label">Cartera Pendiente</div><div class="stat-value">'+fmt(pend)+'</div></div>';
 
   var vxm={};
   ventas.forEach(function(v){ var m=v.fecha.slice(0,7); if(!vxm[m]) vxm[m]={n:0,t:0}; vxm[m].n++; vxm[m].t+=v.total; });
