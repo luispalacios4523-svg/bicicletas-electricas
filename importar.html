@@ -46,7 +46,7 @@ tr:nth-child(even){background:#f5faf7}
 <div class="card">
   <h2>📦 1. Entrada de Productos</h2>
   <div class="upload-box" onclick="document.getElementById('f-prod').click()">
-    <input type="file" id="f-prod" accept=".xlsx,.xls,.csv" onchange="leerArchivo('prod',this)">
+    <input type="file" id="f-prod" accept=".xlsx,.xls,.csv" onclick="this.value=''" onchange="leerArchivo('prod',this)">
     <label>📂 Seleccionar archivo de Productos</label>
     <div class="hint">ingreso productos.xlsx</div>
   </div>
@@ -57,7 +57,7 @@ tr:nth-child(even){background:#f5faf7}
 <div class="card">
   <h2>🛒 2. Ventas</h2>
   <div class="upload-box" onclick="document.getElementById('f-ven').click()">
-    <input type="file" id="f-ven" accept=".xlsx,.xls,.csv" onchange="leerArchivo('ven',this)">
+    <input type="file" id="f-ven" accept=".xlsx,.xls,.csv" onclick="this.value=''" onchange="leerArchivo('ven',this)">
     <label>📂 Seleccionar archivo de Ventas</label>
     <div class="hint">ventas.xlsx</div>
   </div>
@@ -68,7 +68,7 @@ tr:nth-child(even){background:#f5faf7}
 <div class="card">
   <h2>💸 3. Gastos</h2>
   <div class="upload-box" onclick="document.getElementById('f-gas').click()">
-    <input type="file" id="f-gas" accept=".xlsx,.xls,.csv" onchange="leerArchivo('gas',this)">
+    <input type="file" id="f-gas" accept=".xlsx,.xls,.csv" onclick="this.value=''" onchange="leerArchivo('gas',this)">
     <label>📂 Seleccionar archivo de Gastos</label>
     <div class="hint">gastosb.xlsx</div>
   </div>
