@@ -407,7 +407,18 @@
         <div style="color:#a8d5b5;font-size:11px;font-weight:bold;">&#128200; TOTAL EFECTIVO (3 negocios)</div>
         <div id="total-efectivo-global" style="color:#fff;font-size:22px;font-weight:bold;">...</div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <!-- Ajuste de efectivo -->
+      <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:8px;padding:14px;margin-bottom:16px">
+        <div style="font-size:13px;font-weight:700;color:#b45309;margin-bottom:10px">⚖️ Registrar Ajuste de Efectivo (retiro, préstamo, transferencia...)</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
+          <div><label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">FECHA</label><input type="date" id="aj-fecha" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px"></div>
+          <div style="flex:1;min-width:160px"><label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">CONCEPTO</label><input type="text" id="aj-concepto" placeholder="Ej: Retiro personal, pago proveedor..." style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px"></div>
+          <div><label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">VALOR ($)</label><input type="number" id="aj-valor" min="1" placeholder="0" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:140px"></div>
+          <button class="btn btn-sm" style="background:#b45309;color:white;padding:8px 16px" onclick="registrarAjuste()">➕ Registrar</button>
+        </div>
+        <div id="aj-alert" style="margin-top:8px"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
         <div>
           <div style="font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;margin-bottom:8px">📥 Entradas en Efectivo</div>
           <div class="table-wrap"><table>
@@ -420,6 +431,13 @@
           <div class="table-wrap"><table>
             <thead><tr><th>Fecha</th><th>Concepto</th><th>Valor</th></tr></thead>
             <tbody id="caja-efectivo-salidas"></tbody>
+          </table></div>
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:700;color:#b45309;text-transform:uppercase;margin-bottom:8px">⚖️ Ajustes de Efectivo</div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Fecha</th><th>Concepto</th><th>Valor</th><th></th></tr></thead>
+            <tbody id="caja-ajustes"></tbody>
           </table></div>
         </div>
       </div>
@@ -560,7 +578,7 @@ var DB = {
     fetch('/api/save', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
   }
 };
-var KEYS = { productos:'bec_prod', ventas:'bec_ventas', gastos:'bec_gastos', inventario:'bec_inv', metodos:'bec_metodos', canales:'bec_canales' };
+var KEYS = { productos:'bec_prod', ventas:'bec_ventas', gastos:'bec_gastos', inventario:'bec_inv', metodos:'bec_metodos', canales:'bec_canales', ajustes:'bec_ajustes' };
 
 var DEF_METODOS = ['Efectivo','Nequi','Bancolombia','Banco de Bogotá','Addi','Tarjeta Débito','Tarjeta Crédito','Transferencia'];
 var DEF_CANALES = ['Almacén','Facebook','Instagram','WhatsApp','Página Web','Referido'];
@@ -1557,21 +1575,27 @@ function renderCaja() {
   var ef = metodos['Efectivo'] || { entradas: [], salidas: [] };
   var efE = ef.entradas.reduce(function(s,e){ return s+e.valor; },0);
   var efS = ef.salidas.reduce(function(s,e){  return s+e.valor; },0);
-  var efD = efE - efS;
+  var ajustes = DB.get(KEYS.ajustes);
+  var efA = ajustes.reduce(function(s,a){ return s+a.valor; },0);
+  var efD = efE - efS - efA;
   var efColor = efD >= 0 ? 'var(--success)' : 'var(--danger)';
 
   el('caja-efectivo-stats').innerHTML =
     '<div style="background:white;border-radius:10px;border:1px solid var(--border);padding:16px;min-width:180px;border-left:4px solid var(--primary);box-shadow:0 1px 4px rgba(0,0,0,.07)">'+
       '<div class="stat-label">📥 Entradas</div><div class="stat-value" style="color:var(--success)">'+fmt(efE)+'</div></div>'+
     '<div style="background:white;border-radius:10px;border:1px solid var(--border);padding:16px;min-width:180px;border-left:4px solid var(--danger);box-shadow:0 1px 4px rgba(0,0,0,.07)">'+
-      '<div class="stat-label">📤 Salidas</div><div class="stat-value" style="color:var(--danger)">'+fmt(efS)+'</div></div>'+
+      '<div class="stat-label">📤 Salidas (Gastos)</div><div class="stat-value" style="color:var(--danger)">'+fmt(efS)+'</div></div>'+
+    '<div style="background:white;border-radius:10px;border:1px solid var(--border);padding:16px;min-width:180px;border-left:4px solid #b45309;box-shadow:0 1px 4px rgba(0,0,0,.07)">'+
+      '<div class="stat-label">⚖️ Ajustes</div><div class="stat-value" style="color:#b45309">'+fmt(efA)+'</div></div>'+
     '<div style="background:white;border-radius:10px;border:1px solid var(--border);padding:16px;min-width:200px;border-left:4px solid '+efColor+';box-shadow:0 1px 4px rgba(0,0,0,.07)">'+
       '<div class="stat-label">💵 Disponible en Caja</div><div class="stat-value" style="color:'+efColor+'">'+fmt(efD)+'</div></div>';
 
   var hEE = ef.entradas.map(function(e){ return '<tr><td>'+e.fecha+'</td><td>'+e.concepto+'</td><td style="color:var(--success);font-weight:700">+'+fmt(e.valor)+'</td></tr>'; }).join('');
   var hES = ef.salidas.map(function(s){  return '<tr><td>'+s.fecha+'</td><td>'+s.concepto+'</td><td style="color:var(--danger);font-weight:700">−'+fmt(s.valor)+'</td></tr>'; }).join('');
+  var hEA = ajustes.slice().reverse().map(function(a){ return '<tr><td>'+a.fecha+'</td><td>'+a.concepto+'</td><td style="color:#b45309;font-weight:700">−'+fmt(a.valor)+'</td><td><button class="btn btn-danger btn-sm" onclick="eliminarAjuste('+a.id+')">✕</button></td></tr>'; }).join('');
   el('caja-efectivo-entradas').innerHTML = hEE || '<tr><td colspan="3" style="text-align:center;color:var(--muted)">Sin entradas en efectivo</td></tr>';
   el('caja-efectivo-salidas').innerHTML  = hES || '<tr><td colspan="3" style="text-align:center;color:var(--muted)">Sin gastos en efectivo</td></tr>';
+  el('caja-ajustes').innerHTML           = hEA || '<tr><td colspan="4" style="text-align:center;color:var(--muted)">Sin ajustes</td></tr>';
   // Guardar efectivo y calcular total
   fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({efectivo_actual:efD})});
   var _urls=['https://web-production-b8d23.up.railway.app/api/efectivo','https://clientes-online.onrender.com/api/efectivo'];
@@ -1643,6 +1667,27 @@ function renderCaja() {
 // ================================================================
 // INIT
 // ================================================================
+function registrarAjuste() {
+  var fecha   = val('aj-fecha') || today();
+  var concepto = val('aj-concepto').trim();
+  var valor   = parseFloat(val('aj-valor')) || 0;
+  if (!concepto) { el('aj-alert').innerHTML='<span style="color:red;font-size:13px">⚠ Ingrese un concepto</span>'; return; }
+  if (valor <= 0) { el('aj-alert').innerHTML='<span style="color:red;font-size:13px">⚠ Ingrese un valor mayor a 0</span>'; return; }
+  var ajustes = DB.get(KEYS.ajustes);
+  ajustes.push({ id: Date.now(), fecha: fecha, concepto: concepto, valor: valor });
+  DB.set(KEYS.ajustes, ajustes);
+  setVal('aj-concepto',''); setVal('aj-valor','');
+  el('aj-alert').innerHTML='<span style="color:green;font-size:13px">✅ Ajuste registrado</span>';
+  setTimeout(function(){ el('aj-alert').innerHTML=''; }, 2000);
+  renderReportes();
+}
+
+function eliminarAjuste(id) {
+  if (!confirm('¿Eliminar este ajuste?')) return;
+  DB.set(KEYS.ajustes, DB.get(KEYS.ajustes).filter(function(a){ return a.id !== id; }));
+  renderReportes();
+}
+
 function borrarVentasGastos() {
   if (!confirm('¿Borrar todas las ventas y gastos?\n\nEl inventario y productos NO se tocarán.\n\nEsta acción NO se puede deshacer.')) return;
   var payload = {};
