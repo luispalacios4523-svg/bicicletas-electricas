@@ -302,6 +302,7 @@
       <button class="btn btn-warning btn-sm" onclick="limpiarFiltrosVentas()">✕ Limpiar</button>
     </div>
     <div id="ventas-resumen" style="display:none;padding:8px 12px;background:#eaf4ef;border-radius:6px;font-size:13px;margin-bottom:10px"></div>
+    <div id="ventas-resumen-metodos" style="margin-bottom:10px"></div>
     <div class="table-wrap"><table>
       <thead><tr><th>Fecha</th><th>Canal</th><th>Cliente</th><th>SKU</th><th>Producto</th><th>Cant.</th><th>Total</th><th>Pagado</th><th>Saldo</th><th>Tipo</th><th>Pagos</th><th>Acciones</th></tr></thead>
       <tbody id="ventas-body"></tbody>
@@ -912,8 +913,10 @@ function renderVentas() {
   var hasta  = val('ventas-fecha-hasta');
 
   var list = ventas.filter(function(v){
+    var pagosStr = (v.pagos||[]).map(function(p){ return (p.metodo||'').toLowerCase(); }).join(' ');
     var matchQ = !q || v.nombre.toLowerCase().indexOf(q)>-1 || v.sku.toLowerCase().indexOf(q)>-1 ||
-                 (v.telefono||'').indexOf(q)>-1 || (v.factura||'').toLowerCase().indexOf(q)>-1;
+                 (v.telefono||'').indexOf(q)>-1 || (v.factura||'').toLowerCase().indexOf(q)>-1 ||
+                 pagosStr.indexOf(q)>-1 || (v.formapago||'').toLowerCase().indexOf(q)>-1;
     var matchF = !f     || v.tipo === f;
     var matchC = !canal || (v.canal||'') === canal;
     var matchD = !desde || v.fecha >= desde;
@@ -946,24 +949,18 @@ function renderVentas() {
   });
   var metKeys = Object.keys(totMetodos).sort();
   var colores = {Efectivo:'#1a5c35',Nequi:'#6f42c1',Bancolombia:'#0d47a1',Addi:'#e67e22'};
-  var hmDiv = '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;padding:10px 14px;background:#f0faf3;border-radius:8px;border:1px solid #b2d8c3">';
-  hmDiv += '<span style="font-size:12px;font-weight:700;color:#555;align-self:center;margin-right:4px">💳 Recibido por forma de pago:</span>';
+  var totalRecib = metKeys.reduce(function(s,k){ return s+totMetodos[k]; },0);
+  var hmDiv = metKeys.length ? '<div style="display:flex;flex-wrap:wrap;gap:10px;padding:10px 14px;background:#f0faf3;border-radius:8px;border:1px solid #b2d8c3">' +
+    '<span style="font-size:12px;font-weight:700;color:#555;align-self:center;margin-right:4px">💳 Recibido ('+list.length+' ventas):</span>' :
+    '<div style="display:flex;flex-wrap:wrap;gap:10px;padding:10px 14px;background:#f0faf3;border-radius:8px;border:1px solid #b2d8c3">' +
+    '<span style="font-size:12px;color:#888">Sin pagos en esta búsqueda</span>';
   metKeys.forEach(function(k){
     var col = colores[k] || '#555';
     hmDiv += '<span style="background:'+col+';color:#fff;border-radius:6px;padding:5px 12px;font-size:13px;font-weight:700">'+k+': '+fmt(totMetodos[k])+'</span>';
   });
+  if (metKeys.length) hmDiv += '<span style="background:#333;color:#fff;border-radius:6px;padding:5px 12px;font-size:13px;font-weight:700">TOTAL: '+fmt(totalRecib)+'</span>';
   hmDiv += '</div>';
-  el('ventas-resumen-metodos') ? el('ventas-resumen-metodos').outerHTML = hmDiv : null;
-  // insertar si no existe
-  var existente = document.getElementById('ventas-resumen-metodos');
-  if (!existente) {
-    var div = document.createElement('div');
-    div.id = 'ventas-resumen-metodos';
-    div.innerHTML = hmDiv;
-    el('ventas-body').parentNode.parentNode.insertBefore(div, el('ventas-body').parentNode.parentNode.firstChild);
-  } else {
-    existente.innerHTML = hmDiv;
-  }
+  el('ventas-resumen-metodos').innerHTML = hmDiv;
 
   if (!list.length){ el('ventas-body').innerHTML='<tr><td colspan="12" style="text-align:center;color:var(--muted);padding:16px">Sin ventas que coincidan con la búsqueda</td></tr>'; return; }
   var h=''; list.forEach(function(v){
