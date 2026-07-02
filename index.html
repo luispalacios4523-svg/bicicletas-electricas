@@ -145,6 +145,7 @@
     <div class="search-bar">
       <input type="text" id="inv-search" placeholder="Buscar por SKU o nombre..." oninput="renderInventario()">
       <button class="btn btn-primary btn-sm" onclick="exportarInventario()">⬇ Exportar CSV</button>
+      <button class="btn btn-sm" style="background:#e67e22;color:white" onclick="recalcularInventario()">🔄 Recalcular Stock</button>
     </div>
     <div class="table-wrap"><table>
       <thead><tr><th>SKU</th><th>Producto</th><th>Categoría</th><th>Stock</th><th>P. Compra</th><th>Total Inv.</th><th>Valor FOB</th><th>Estado</th></tr></thead>
@@ -749,6 +750,35 @@ function renderInventario() {
     h+='<td>'+estado+'</td></tr>';
   });
   el('inv-body').innerHTML = h;
+}
+
+function recalcularInventario() {
+  if (!confirm('¿Recalcular el stock?\n\nSe reconstruirá desde cero:\n• Entradas de productos (suma)\n• Ventas registradas (resta)\n\nEsto corrige discrepancias por importaciones.')) return;
+
+  // Reconstruir desde entradas de productos
+  var prods = DB.get(KEYS.productos);
+  var inv = {};
+  prods.forEach(function(p) {
+    if (!inv[p.sku]) inv[p.sku] = { nombre: p.nombre, categoria: p.categoria||'', stock: 0, precioCompra: 0, precioVenta: p.pventa||0 };
+    inv[p.sku].stock += p.cantidad;
+    inv[p.sku].precioCompra = p.valor;
+    inv[p.sku].nombre = p.nombre;
+    inv[p.sku].categoria = p.categoria||'';
+    if (p.pventa) inv[p.sku].precioVenta = p.pventa;
+  });
+
+  // Descontar todas las ventas
+  var ventas = DB.get(KEYS.ventas);
+  ventas.forEach(function(v) {
+    if (v.sku && inv[v.sku]) {
+      inv[v.sku].stock -= (v.cantidad || 1);
+      if (inv[v.sku].stock < 0) inv[v.sku].stock = 0;
+    }
+  });
+
+  setInventario(inv);
+  renderInventario(); renderInvStats();
+  alert('✅ Stock recalculado correctamente.');
 }
 
 function exportarInventario() {
