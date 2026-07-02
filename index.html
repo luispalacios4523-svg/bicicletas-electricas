@@ -140,6 +140,10 @@
 <!-- ===== INVENTARIO ===== -->
 <div id="page-inventario" class="page active">
   <div class="stats-grid" id="inv-stats"></div>
+  <div class="card" id="inv-categorias-card" style="margin-bottom:16px">
+    <h2>📊 Inventario por Categoría</h2>
+    <div id="inv-categorias"></div>
+  </div>
   <div class="card">
     <h2>📦 Inventario Actual</h2>
     <div class="search-bar">
@@ -771,6 +775,31 @@ function renderInvStats() {
     '<div class="stat-card blue"><div class="stat-label">Unidades</div><div class="stat-value">'+items+'</div></div>'+
     '<div class="stat-card accent"><div class="stat-label">Valor Inventario</div><div class="stat-value">'+fmt(valor)+'</div></div>'+
     '<div class="stat-card danger"><div class="stat-label">Sin Stock</div><div class="stat-value">'+sin+'</div></div>';
+
+  // Resumen por categoría
+  var cats = {};
+  skus.forEach(function(k) {
+    var d = inv[k], cat = d.categoria||'Sin categoría';
+    if (!cats[cat]) cats[cat] = { unidades: 0, valor: 0, refs: 0 };
+    cats[cat].unidades += d.stock;
+    cats[cat].valor    += d.stock * d.precioCompra;
+    cats[cat].refs++;
+  });
+  var catKeys = Object.keys(cats).sort();
+  if (!catKeys.length) { el('inv-categorias-card').style.display='none'; return; }
+  el('inv-categorias-card').style.display='';
+  var h = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">';
+  catKeys.forEach(function(cat) {
+    var c = cats[cat];
+    h += '<div style="background:#f0faf3;border:1px solid #b2d8c3;border-radius:8px;padding:14px">' +
+         '<div style="font-weight:700;color:#1a5c35;margin-bottom:8px;font-size:14px">'+cat+'</div>' +
+         '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="color:#666">Referencias</span><strong>'+c.refs+'</strong></div>' +
+         '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="color:#666">Unidades</span><strong>'+c.unidades+'</strong></div>' +
+         '<div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:#666">Valor inventario</span><strong>'+fmt(c.valor)+'</strong></div>' +
+         '</div>';
+  });
+  h += '</div>';
+  el('inv-categorias').innerHTML = h;
 }
 
 function renderInventario() {
