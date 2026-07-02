@@ -549,7 +549,10 @@ var KEYS = { productos:'bec_prod', ventas:'bec_ventas', gastos:'bec_gastos', inv
 var DEF_METODOS = ['Efectivo','Nequi','Bancolombia','Banco de Bogotá','Addi','Tarjeta Débito','Tarjeta Crédito','Transferencia'];
 var DEF_CANALES = ['Almacén','Facebook','Instagram','WhatsApp','Página Web','Referido'];
 
-function getLista(key, def) { return _cache[key] !== undefined ? _cache[key] : def.slice(); }
+function getLista(key, def) {
+  var v = _cache[key];
+  return (Array.isArray(v) && v.length > 0) ? v : def.slice();
+}
 function setLista(key, arr) {
   _cache[key] = arr;
   var payload = {}; payload[key] = arr;
