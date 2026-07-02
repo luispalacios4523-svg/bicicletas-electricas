@@ -1015,9 +1015,11 @@ function renderVentas() {
 
   var list = ventas.filter(function(v){
     var pagosStr = (v.pagos||[]).map(function(p){ return (p.metodo||'').toLowerCase(); }).join(' ');
+    var totalStr = String(v.total||''); var valorStr = String(v.valor||'');
     var matchQ = !q || v.nombre.toLowerCase().indexOf(q)>-1 || v.sku.toLowerCase().indexOf(q)>-1 ||
                  (v.telefono||'').indexOf(q)>-1 || (v.factura||'').toLowerCase().indexOf(q)>-1 ||
-                 pagosStr.indexOf(q)>-1 || (v.formapago||'').toLowerCase().indexOf(q)>-1;
+                 pagosStr.indexOf(q)>-1 || (v.formapago||'').toLowerCase().indexOf(q)>-1 ||
+                 totalStr.indexOf(q)>-1 || valorStr.indexOf(q)>-1 || (v.producto||'').toLowerCase().indexOf(q)>-1;
     var matchF = !f     || v.tipo === f;
     var matchC = !canal || (v.canal||'') === canal;
     var matchD = !desde || v.fecha >= desde;
