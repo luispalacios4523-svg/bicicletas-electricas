@@ -370,6 +370,17 @@
 
 <!-- ===== REPORTES ===== -->
 <div id="page-reportes" class="page">
+  <div class="card" style="margin-bottom:16px">
+    <h2>💾 Backup de Base de Datos</h2>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <button class="btn btn-primary" onclick="descargarBackup()">⬇ Descargar Backup Ahora</button>
+      <label class="btn" style="background:#6c757d;color:white;cursor:pointer">
+        📂 Restaurar desde Backup
+        <input type="file" accept=".json" style="display:none" onchange="restaurarBackup(this)">
+      </label>
+      <span id="backup-info" style="font-size:12px;color:#666"></span>
+    </div>
+  </div>
   <div class="stats-grid" id="rep-stats"></div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
     <div class="card"><h2>📈 Ventas por Mes</h2>
@@ -1621,6 +1632,34 @@ function borrarTodosLosDatos() {
   return;
 }
 
+function descargarBackup() {
+  var fecha = new Date().toISOString().slice(0,10);
+  var data = JSON.stringify(_cache, null, 2);
+  var a = document.createElement('a');
+  a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(data);
+  a.download = 'backup-bicicletas-' + fecha + '.json';
+  a.click();
+  localStorage.setItem('ultimo_backup', fecha);
+  var bi = el('backup-info');
+  if (bi) bi.textContent = '✅ Backup descargado: ' + fecha;
+}
+
+function restaurarBackup(input) {
+  var file = input.files[0]; if (!file) return;
+  if (!confirm('¿Restaurar backup?\n\nEsto REEMPLAZARÁ todos los datos actuales con los del archivo.\n\nEsta acción no se puede deshacer.')) { input.value=''; return; }
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var data = JSON.parse(e.target.result);
+      fetch('/api/save', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) })
+        .then(function(){ _cache = data; alert('✅ Backup restaurado correctamente. Recargando...'); location.reload(); })
+        .catch(function(){ alert('❌ Error al restaurar. Intente de nuevo.'); });
+    } catch(err) { alert('❌ Archivo inválido. Asegúrese de usar un backup generado por esta app.'); }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
 window.onload = function() {
   setVal('p-fecha', today()); setVal('v-fecha', today()); setVal('g-fecha', today());
   fetch('/api/load').then(function(r){ return r.json(); }).then(function(data){
@@ -1628,12 +1667,25 @@ window.onload = function() {
     refrescarDropdowns();
     pagosVenta = []; renderFilasPago();
     renderInventario(); renderInvStats();
+    // Mostrar fecha del último backup
+    var ub = localStorage.getItem('ultimo_backup');
+    var bi = el('backup-info');
+    if (bi && ub) bi.textContent = 'Último backup: ' + ub;
   }).catch(function(){
     refrescarDropdowns();
     pagosVenta = []; renderFilasPago();
     renderInventario(); renderInvStats();
   });
 };
+
+// Auto-backup al cerrar: una vez por día
+window.addEventListener('beforeunload', function() {
+  var hoy = new Date().toISOString().slice(0,10);
+  var ub = localStorage.getItem('ultimo_backup');
+  if (ub !== hoy) {
+    descargarBackup();
+  }
+});
 setInterval(function(){
   var _urls=['/api/efectivo','https://web-production-b8d23.up.railway.app/api/efectivo','https://clientes-online.onrender.com/api/efectivo'];
   Promise.all(_urls.map(function(u){return fetch(u).then(function(r){return r.json();}).catch(function(){return {efectivo:0};});}))
