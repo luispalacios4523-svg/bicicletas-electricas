@@ -725,8 +725,35 @@ function eliminarProducto(id) {
 // ================================================================
 // INVENTARIO
 // ================================================================
+function calcInventarioReal() {
+  // Parte de bec_inv (datos base: precios, nombres) pero recalcula stock real
+  var base = getInventario();
+  var inv = {};
+  // Copiar datos base sin stock
+  Object.keys(base).forEach(function(sku) {
+    inv[sku] = { nombre: base[sku].nombre, categoria: base[sku].categoria||'', stock: 0, precioCompra: base[sku].precioCompra||0, precioVenta: base[sku].precioVenta||0 };
+  });
+  // Sumar entradas de productos
+  DB.get(KEYS.productos).forEach(function(p) {
+    if (!p.sku) return;
+    if (!inv[p.sku]) inv[p.sku] = { nombre: p.nombre||'', categoria: p.categoria||'', stock: 0, precioCompra: p.valor||0, precioVenta: p.pventa||0 };
+    inv[p.sku].stock += (p.cantidad||0);
+    inv[p.sku].precioCompra = p.valor||0;
+    if (p.pventa) inv[p.sku].precioVenta = p.pventa;
+    inv[p.sku].nombre = p.nombre||inv[p.sku].nombre;
+  });
+  // Restar ventas
+  DB.get(KEYS.ventas).forEach(function(v) {
+    if (v.sku && inv[v.sku]) {
+      inv[v.sku].stock -= (v.cantidad||1);
+      if (inv[v.sku].stock < 0) inv[v.sku].stock = 0;
+    }
+  });
+  return inv;
+}
+
 function renderInvStats() {
-  var inv=getInventario(), skus=Object.keys(inv), items=0, valor=0, sin=0;
+  var inv=calcInventarioReal(), skus=Object.keys(inv), items=0, valor=0, sin=0;
   skus.forEach(function(k){ items+=inv[k].stock; valor+=inv[k].stock*inv[k].precioCompra; if(!inv[k].stock) sin++; });
   el('inv-stats').innerHTML =
     '<div class="stat-card"><div class="stat-label">Referencias</div><div class="stat-value">'+skus.length+'</div></div>'+
@@ -736,7 +763,7 @@ function renderInvStats() {
 }
 
 function renderInventario() {
-  var inv=getInventario(), q=el('inv-search')?val('inv-search').toLowerCase():'';
+  var inv=calcInventarioReal(), q=el('inv-search')?val('inv-search').toLowerCase():'';
   var keys=Object.keys(inv).filter(function(s){ return !q||s.toLowerCase().indexOf(q)>-1||inv[s].nombre.toLowerCase().indexOf(q)>-1; });
   if (!keys.length){ el('inv-body').innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--muted)">Sin productos</td></tr>'; return; }
   var h=''; keys.forEach(function(sku){
