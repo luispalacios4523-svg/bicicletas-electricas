@@ -442,6 +442,24 @@
         </div>
       </div>
     </div>
+    <!-- EXTRACTO BANCARIO EFECTIVO -->
+    <div class="card" style="grid-column:1/-1">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <h2>📋 Extracto Efectivo</h2>
+        <div style="display:flex;gap:8px;align-items:center">
+          <label style="font-size:13px;color:var(--muted)">Desde</label>
+          <input type="date" id="ext-desde" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+          <label style="font-size:13px;color:var(--muted)">Hasta</label>
+          <input type="date" id="ext-hasta" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+          <button class="btn btn-primary btn-sm" onclick="renderExtracto()">Ver</button>
+          <button class="btn btn-sm" onclick="document.getElementById('ext-desde').value='';document.getElementById('ext-hasta').value='';renderExtracto()">Todos</button>
+        </div>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Fecha</th><th>Concepto</th><th style="text-align:right;color:var(--success)">Entrada</th><th style="text-align:right;color:var(--danger)">Salida</th><th style="text-align:right">Saldo</th></tr></thead>
+        <tbody id="extracto-body"></tbody>
+      </table></div>
+    </div>
     <!-- OTROS MÉTODOS -->
     <div class="card" style="grid-column:1/-1">
       <h2>💳 Disponible por Otros Medios de Pago</h2>
@@ -1522,6 +1540,66 @@ function renderReportes() {
   renderCaja();
 }
 
+function renderExtracto() {
+  var ventas  = DB.get(KEYS.ventas);
+  var gastos  = DB.get(KEYS.gastos);
+  var ajustes = DB.get(KEYS.ajustes);
+  var desde   = (document.getElementById('ext-desde')||{}).value||'';
+  var hasta   = (document.getElementById('ext-hasta')||{}).value||'';
+
+  var movs = [];
+
+  // Entradas: pagos en efectivo de ventas
+  ventas.forEach(function(v){
+    (v.pagos||[]).forEach(function(p){
+      if((p.metodo||'').toLowerCase()==='efectivo' && p.valor>0)
+        movs.push({fecha:v.fecha, concepto:'Venta — '+v.nombre+' ('+v.sku+')', entrada:p.valor, salida:0});
+    });
+    // Abonos en efectivo
+    (v.abonos||[]).forEach(function(a){
+      if((a.forma||'').toLowerCase()==='efectivo' && a.valor>0)
+        movs.push({fecha:a.fecha, concepto:'Abono — '+v.nombre, entrada:a.valor, salida:0});
+    });
+  });
+
+  // Salidas: gastos en efectivo
+  gastos.forEach(function(g){
+    if((g.formapago||'efectivo').toLowerCase()==='efectivo' && g.valor>0)
+      movs.push({fecha:g.fecha, concepto:'Gasto — '+g.concepto+(g.categoria?' ('+g.categoria+')':''), entrada:0, salida:g.valor});
+  });
+
+  // Salidas: ajustes
+  ajustes.forEach(function(a){
+    movs.push({fecha:a.fecha, concepto:'Ajuste — '+a.concepto, entrada:0, salida:a.valor});
+  });
+
+  // Filtrar por fechas
+  if(desde) movs=movs.filter(function(m){return m.fecha>=desde;});
+  if(hasta) movs=movs.filter(function(m){return m.fecha<=hasta;});
+
+  // Ordenar cronológicamente asc
+  movs.sort(function(a,b){return a.fecha.localeCompare(b.fecha);});
+
+  if(!movs.length){
+    document.getElementById('extracto-body').innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--muted)">Sin movimientos en efectivo</td></tr>';
+    return;
+  }
+
+  var saldoAcum=0;
+  var html=movs.map(function(m){
+    saldoAcum+=m.entrada-m.salida;
+    var color=saldoAcum>=0?'var(--success)':'var(--danger)';
+    return '<tr>'+
+      '<td>'+m.fecha+'</td>'+
+      '<td>'+m.concepto+'</td>'+
+      '<td style="text-align:right;color:var(--success);font-weight:700">'+(m.entrada?'+'+fmt(m.entrada):'')+'</td>'+
+      '<td style="text-align:right;color:var(--danger);font-weight:700">'+(m.salida?'−'+fmt(m.salida):'')+'</td>'+
+      '<td style="text-align:right;font-weight:800;color:'+color+'">'+fmt(saldoAcum)+'</td>'+
+    '</tr>';
+  }).join('');
+  document.getElementById('extracto-body').innerHTML=html;
+}
+
 function renderCaja() {
   var ventas = DB.get(KEYS.ventas);
   var gastos = DB.get(KEYS.gastos);
@@ -1596,6 +1674,7 @@ function renderCaja() {
   el('caja-efectivo-entradas').innerHTML = hEE || '<tr><td colspan="3" style="text-align:center;color:var(--muted)">Sin entradas en efectivo</td></tr>';
   el('caja-efectivo-salidas').innerHTML  = hES || '<tr><td colspan="3" style="text-align:center;color:var(--muted)">Sin gastos en efectivo</td></tr>';
   el('caja-ajustes').innerHTML           = hEA || '<tr><td colspan="4" style="text-align:center;color:var(--muted)">Sin ajustes</td></tr>';
+  renderExtracto();
   // Guardar efectivo y calcular total
   fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({efectivo_actual:efD})});
   var _urls=['https://web-production-b8d23.up.railway.app/api/efectivo','https://clientes-online.onrender.com/api/efectivo'];
