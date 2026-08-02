@@ -34,6 +34,21 @@ if DATABASE_URL:
             except: result[key] = value
         return result
 
+    def db_get_one(key, default=None):
+        # Trae UNA sola clave. /api/efectivo usaba db_load_all(), que descarga
+        # toda la base para leer un unico numero, cada 30 segundos y desde cada
+        # pestana abierta. Eso agotaba la cuota de transferencia de Supabase.
+        conn = get_db()
+        try:
+            rows = conn.run('SELECT value FROM store WHERE key = :key', key=key)
+        finally:
+            try: conn.close()
+            except Exception: pass
+        if rows:
+            try: return json.loads(rows[0][0])
+            except Exception: return rows[0][0]
+        return default
+
     def db_save(data):
         conn = get_db()
         for key, value in data.items():
@@ -65,6 +80,15 @@ else:
             except: result[row['key']] = row['value']
         return result
 
+    def db_get_one(key, default=None):
+        conn = get_db()
+        row = conn.execute('SELECT value FROM store WHERE key = ?', (key,)).fetchone()
+        conn.close()
+        if row:
+            try: return json.loads(row['value'])
+            except Exception: return row['value']
+        return default
+
     def db_save(data):
         conn = get_db()
         for key, value in data.items():
@@ -87,7 +111,8 @@ def importar():
 
 @app.route('/api/efectivo')
 def efectivo():
-    val = db_load_all().get('efectivo_actual', 0)
+    # Consulta SOLO esta clave, no la base completa.
+    val = db_get_one('efectivo_actual', 0)
     r = jsonify({'efectivo': val})
     return _cors(r)
 
