@@ -598,12 +598,17 @@ var DB = {
 };
 var KEYS = { productos:'bec_prod', ventas:'bec_ventas', gastos:'bec_gastos', inventario:'bec_inv', metodos:'bec_metodos', canales:'bec_canales', ajustes:'bec_ajustes' };
 
-var DEF_METODOS = ['Efectivo','Nequi','Bancolombia','Banco de Bogotá','Addi','Tarjeta Débito','Tarjeta Crédito','Transferencia'];
+var DEF_METODOS = ['Efectivo','Nequi','Bancolombia','Banco de Bogotá','Addi','Sistecredito','Tarjeta Débito','Tarjeta Crédito','Transferencia'];
 var DEF_CANALES = ['Almacén','Facebook','Instagram','WhatsApp','Página Web','Referido'];
 
 function getLista(key, def) {
   var v = _cache[key];
-  return (Array.isArray(v) && v.length > 0) ? v : def.slice();
+  if (!Array.isArray(v) || v.length === 0) return def.slice();
+  // Fusionar: agregar defaults que falten sin borrar los existentes
+  var actualizado = false;
+  def.forEach(function(d) { if (v.indexOf(d) < 0) { v.push(d); actualizado = true; } });
+  if (actualizado) setLista(key, v);
+  return v;
 }
 function setLista(key, arr) {
   _cache[key] = arr;
