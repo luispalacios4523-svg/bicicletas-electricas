@@ -135,6 +135,36 @@
   <div class="tab" onclick="showPage('cartera',this)">💳 Cartera</div>
   <div class="tab" onclick="showPage('gastos',this)">💸 Gastos</div>
   <div class="tab" onclick="showPage('reportes',this)">📊 Reportes</div>
+  <div class="tab" onclick="showPage('bitacora',this)">🕓 Bitácora</div>
+</div>
+
+<!-- ===== BITACORA / PAPELERA ===== -->
+<div id="page-bitacora" class="page">
+  <div class="card">
+    <h2>🕓 Bitácora de Movimientos</h2>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:12px">
+      Registro permanente de todo lo que se crea, edita o elimina. <strong>Nunca se borra.</strong>
+      Si un registro desaparece, aquí queda la copia para recuperarlo.
+    </p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+      <select id="bit-filtro" onchange="renderBitacora()" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+        <option value="">Todos los movimientos</option>
+        <option value="create">Solo creados</option>
+        <option value="update">Solo editados</option>
+        <option value="delete">Solo eliminados</option>
+        <option value="shrink">⚠️ Pérdidas detectadas</option>
+      </select>
+      <button class="btn btn-primary" onclick="cargarBitacora()">🔄 Actualizar</button>
+      <span id="bit-estado" style="font-size:13px;color:var(--muted)"></span>
+    </div>
+    <div id="bit-alert"></div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Fecha y hora</th><th>Acción</th><th>Tipo</th><th>Detalle</th><th>Recuperar</th></tr></thead>
+        <tbody id="bitacora-body"><tr><td colspan="5" style="text-align:center;color:var(--muted)">Presione Actualizar para cargar</td></tr></tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
 <!-- ===== INVENTARIO ===== -->
@@ -287,7 +317,7 @@
     </div>
 
     <div class="btn-row">
-      <button class="btn btn-primary" onclick="guardarVenta()">💾 Registrar Venta</button>
+      <button class="btn btn-primary" id="btn-guardar-venta" onclick="guardarVenta()">💾 Registrar Venta</button>
       <button class="btn btn-warning" onclick="limpiarVenta()">🔄 Limpiar</button>
     </div>
   </div>
@@ -598,6 +628,54 @@ var DB = {
 };
 var KEYS = { productos:'bec_prod', ventas:'bec_ventas', gastos:'bec_gastos', inventario:'bec_inv', metodos:'bec_metodos', canales:'bec_canales', ajustes:'bec_ajustes' };
 
+// ================================================================
+// GUARDADO SEGURO (atomico, registro por registro)
+// El servidor bloquea la clave, lee lo ultimo guardado, aplica el cambio
+// y confirma. Una pestana desactualizada ya NO puede borrar registros.
+// ================================================================
+function apiPost(path, body) {
+  return fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  }).then(function(r) {
+    if (!r.ok) throw new Error('El servidor respondio ' + r.status);
+    return r.json();
+  }).then(function(j) {
+    if (!j.ok) throw new Error(j.error || 'No se pudo guardar');
+    return j;
+  });
+}
+
+// Recarga el cache desde el servidor para que la pantalla siempre
+// muestre exactamente lo que quedo guardado.
+function recargarCache() {
+  return fetch('/api/load').then(function(r){ return r.json(); })
+    .then(function(d){ _cache = d || {}; return _cache; });
+}
+
+function itemAdd(key, item)    { return apiPost('/api/item/add',    {key:key, item:item}); }
+function itemUpdate(key, item) { return apiPost('/api/item/update', {key:key, item:item}); }
+function itemDelete(key, id)   { return apiPost('/api/item/delete', {key:key, id:id}); }
+function invAdjust(sku, delta) { return apiPost('/api/inv/adjust',  {sku:sku, delta:delta}); }
+
+// Refresca todas las vistas sin que un error en una rompa las demas.
+function _try(fn) { try { fn(); } catch(e) {} }
+function refrescarVistas() {
+  _try(renderInventario); _try(renderInvStats);
+  _try(renderVentas);     _try(renderVentasStats);
+  _try(renderCartera);    _try(renderCarteraStats);
+  _try(renderGastos);     _try(renderHistorial);
+}
+
+// Aviso claro cuando algo NO se guardo. Antes fallaba en silencio.
+function errorGuardado(alertId, e) {
+  var msg = 'NO SE GUARDO: ' + (e && e.message ? e.message : 'error de conexion') +
+            '. Revise su internet y vuelva a intentarlo.';
+  if (alertId && el(alertId)) showAlert(alertId, '❌ ' + msg, 'error');
+  else alert('❌ ' + msg);
+}
+
 var DEF_METODOS = ['Efectivo','Nequi','Bancolombia','Banco de Bogotá','Addi','Sistecredito','Tarjeta Débito','Tarjeta Crédito','Transferencia'];
 var DEF_CANALES = ['Almacén','Facebook','Instagram','WhatsApp','Página Web','Referido'];
 
@@ -649,6 +727,118 @@ function showPage(page, tab) {
   if (page==='gastos')     { renderGastos(); }
   if (page==='reportes')   { renderReportes(); }
   if (page==='productos')  { renderHistorial(); }
+  if (page==='bitacora')   { cargarBitacora(); }
+}
+
+// ================================================================
+// BITACORA / PAPELERA — recuperacion de registros
+// ================================================================
+var _bitacora = [];
+
+function cargarBitacora() {
+  el('bit-estado').textContent = 'Cargando...';
+  fetch('/api/audit?limit=500').then(function(r){ return r.json(); })
+    .then(function(d){
+      _bitacora = Array.isArray(d) ? d : [];
+      el('bit-estado').textContent = _bitacora.length + ' movimientos registrados';
+      renderBitacora();
+    })
+    .catch(function(){
+      el('bit-estado').textContent = 'No se pudo cargar la bitácora';
+    });
+}
+
+function _nombreClave(k) {
+  if (k === KEYS.ventas)    return 'Venta';
+  if (k === KEYS.gastos)    return 'Gasto';
+  if (k === KEYS.productos) return 'Entrada producto';
+  if (k === KEYS.ajustes)   return 'Ajuste de caja';
+  return k || '-';
+}
+
+function _resumen(ev) {
+  var s = ev.snapshot;
+  if (!s) return '-';
+  var obj = s.before || s.after || s;
+  if (ev.action === 'shrink') {
+    return '<strong style="color:var(--danger)">Se perdieron ' + (s.perdidos||0) +
+           ' registro(s)</strong> — quedan ' + (s.after_count||0) +
+           '. Copia completa guardada.';
+  }
+  if (obj && typeof obj === 'object') {
+    var partes = [];
+    if (obj.nombre)   partes.push('<strong>'+obj.nombre+'</strong>');
+    if (obj.concepto) partes.push('<strong>'+obj.concepto+'</strong>');
+    if (obj.producto) partes.push(obj.producto);
+    if (obj.fecha)    partes.push(obj.fecha);
+    if (obj.total !== undefined) partes.push(fmt(obj.total));
+    else if (obj.valor !== undefined) partes.push(fmt(obj.valor));
+    if (partes.length) return partes.join(' — ');
+  }
+  return '-';
+}
+
+function renderBitacora() {
+  var f = val('bit-filtro');
+  var list = _bitacora.filter(function(e){ return !f || e.action === f; });
+  if (!list.length) {
+    el('bitacora-body').innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">Sin movimientos</td></tr>';
+    return;
+  }
+  var etiquetas = { create:'✅ Creado', update:'✏️ Editado', delete:'🗑️ Eliminado', shrink:'⚠️ Pérdida' };
+  var h = '';
+  list.forEach(function(ev, i) {
+    var recuperable = (ev.action === 'delete' || ev.action === 'shrink');
+    h += '<tr>';
+    h += '<td style="white-space:nowrap">' + (ev.ts||'').replace('T',' ') + '</td>';
+    h += '<td>' + (etiquetas[ev.action] || ev.action) + '</td>';
+    h += '<td>' + _nombreClave(ev.key) + '</td>';
+    h += '<td>' + _resumen(ev) + '</td>';
+    h += '<td>' + (recuperable
+        ? '<button class="btn btn-primary btn-sm" onclick="recuperarBitacora('+i+')">↩ Recuperar</button>'
+        : '-') + '</td>';
+    h += '</tr>';
+  });
+  el('bitacora-body').innerHTML = h;
+}
+
+function recuperarBitacora(i) {
+  var f = val('bit-filtro');
+  var list = _bitacora.filter(function(e){ return !f || e.action === f; });
+  var ev = list[i];
+  if (!ev || !ev.snapshot) return;
+
+  if (ev.action === 'delete') {
+    var item = ev.snapshot.before;
+    if (!item) return;
+    if (!confirm('¿Recuperar este registro?\n\n' + _resumen(ev).replace(/<[^>]+>/g,'') +
+                 '\n\nSe volverá a agregar tal como estaba.')) return;
+    itemAdd(ev.key, item)
+      .then(function(r){
+        if (r.duplicado) { alert('Ese registro ya existe, no se duplicó.'); return; }
+        // Si era una venta, volver a descontar del inventario
+        if (ev.key === KEYS.ventas && item.sku && item.cantidad) {
+          return invAdjust(item.sku, -item.cantidad);
+        }
+      })
+      .then(function(){ return recargarCache(); })
+      .then(function(){ alert('✅ Registro recuperado.'); cargarBitacora(); refrescarVistas(); })
+      .catch(function(e){ errorGuardado('bit-alert', e); });
+
+  } else if (ev.action === 'shrink') {
+    var lista = ev.snapshot.before;
+    if (!Array.isArray(lista)) return;
+    if (!confirm('RESTAURAR LISTA COMPLETA\n\nSe restaurarán los ' + lista.length +
+                 ' registros que existían antes de la pérdida.\n\n' +
+                 'Los registros creados después NO se borran: se combinan.\n\n¿Continuar?')) return;
+    // Reinsertar uno por uno (itemAdd ignora los que ya existen)
+    lista.reduce(function(p, it) {
+      return p.then(function(){ return itemAdd(ev.key, it).catch(function(){}); });
+    }, Promise.resolve())
+      .then(function(){ return recargarCache(); })
+      .then(function(){ alert('✅ Lista restaurada. Revise el inventario por si necesita ajuste.'); cargarBitacora(); refrescarVistas(); })
+      .catch(function(e){ errorGuardado('bit-alert', e); });
+  }
 }
 
 // ================================================================
@@ -742,14 +932,17 @@ function guardarProducto() {
   var e = { id:Date.now(), fecha:fecha, proveedor:prov, factura:val('p-factura'), sku:sku,
     nombre:nombre, categoria:val('p-categoria'), cantidad:cant, valor:valor, total:cant*valor,
     pventa:parseFloat(val('p-pventa'))||0 };
-  var prods = DB.get(KEYS.productos); prods.push(e); DB.set(KEYS.productos, prods);
-  var inv = getInventario();
-  if (!inv[sku]) inv[sku]={ nombre:nombre, categoria:e.categoria, stock:0, precioCompra:0, precioVenta:0 };
-  inv[sku].stock += cant; inv[sku].precioCompra = valor; inv[sku].nombre = nombre; inv[sku].categoria = e.categoria;
-  if (e.pventa) inv[sku].precioVenta = e.pventa;
-  setInventario(inv);
-  showAlert('prod-alert','✅ Producto "'+nombre+'" ingresado. Stock: '+inv[sku].stock);
-  limpiarProd(); renderHistorial();
+  var campos = { nombre:nombre, categoria:e.categoria, precioCompra:valor };
+  if (e.pventa) campos.precioVenta = e.pventa;
+
+  itemAdd(KEYS.productos, e)
+    .then(function(){ return apiPost('/api/inv/upsert', { sku:sku, delta:cant, fields:campos }); })
+    .then(function(r){ return recargarCache().then(function(){ return r; }); })
+    .then(function(r){
+      showAlert('prod-alert','✅ Producto "'+nombre+'" ingresado y confirmado. Stock: '+r.stock);
+      limpiarProd(); renderHistorial(); renderInventario(); renderInvStats();
+    })
+    .catch(function(err){ errorGuardado('prod-alert', err); });
 }
 
 function limpiarProd() {
@@ -772,10 +965,14 @@ function renderHistorial() {
 }
 
 function eliminarProducto(id) {
-  if (!confirm('¿Eliminar entrada? Se revertirá el stock.')) return;
   var prods = DB.get(KEYS.productos), p=null; prods.forEach(function(x){ if(x.id===id) p=x; });
-  if (p) { var inv=getInventario(); if(inv[p.sku]){ inv[p.sku].stock-=p.cantidad; if(inv[p.sku].stock<0) inv[p.sku].stock=0; } setInventario(inv); }
-  DB.set(KEYS.productos, prods.filter(function(x){ return x.id!==id; })); renderHistorial();
+  if (!p) return;
+  if (!confirm('¿Eliminar esta entrada?\n\nProducto: '+p.nombre+'\nCantidad: '+p.cantidad+'\n\nSe revertirá el stock. Quedará copia en la Bitácora.')) return;
+  itemDelete(KEYS.productos, id)
+    .then(function(){ return p.sku ? invAdjust(p.sku, -p.cantidad) : null; })
+    .then(function(){ return recargarCache(); })
+    .then(function(){ renderHistorial(); renderInventario(); renderInvStats(); })
+    .catch(function(e){ errorGuardado('prod-alert', e); });
 }
 
 // ================================================================
@@ -1013,11 +1210,22 @@ function guardarVenta() {
     abonos: []
   };
 
-  inv[sku].stock -= cant; setInventario(inv);
-  var ventas = DB.get(KEYS.ventas); ventas.push(venta); DB.set(KEYS.ventas, ventas);
+  // Guardado atomico: el servidor agrega ESTA venta a lo que ya tiene guardado.
+  // No enviamos la lista completa, asi que no podemos borrar ventas de otros.
+  var btn = el('btn-guardar-venta');
+  if (btn) { btn.disabled = true; btn.dataset.txt = btn.textContent; btn.textContent = 'Guardando...'; }
 
-  showAlert('venta-alert','✅ Venta registrada. '+(tipo==='Crédito'?'Saldo pendiente: '+fmt(saldo):'Total pagado: '+fmt(totalPag)));
-  limpiarVenta(); renderVentas();
+  itemAdd(KEYS.ventas, venta)
+    .then(function(){ return invAdjust(sku, -cant); })
+    .then(function(){ return recargarCache(); })
+    .then(function(){
+      showAlert('venta-alert','✅ Venta registrada y confirmada por el servidor. '+(tipo==='Crédito'?'Saldo pendiente: '+fmt(saldo):'Total pagado: '+fmt(totalPag)));
+      limpiarVenta(); renderVentas(); renderInventario(); renderInvStats();
+    })
+    .catch(function(e){ errorGuardado('venta-alert', e); })
+    .then(function(){
+      if (btn) { btn.disabled = false; btn.textContent = btn.dataset.txt || '💾 Registrar Venta'; }
+    });
 }
 
 function limpiarVenta() {
@@ -1135,10 +1343,16 @@ function renderVentas() {
 }
 
 function eliminarVenta(id) {
-  if (!confirm('¿Eliminar esta venta? Se revertirá el stock.')) return;
   var ventas=DB.get(KEYS.ventas), v=null; ventas.forEach(function(x){ if(x.id===id) v=x; });
-  if (v){ var inv=getInventario(); if(inv[v.sku]) inv[v.sku].stock+=v.cantidad; setInventario(inv); }
-  DB.set(KEYS.ventas, ventas.filter(function(x){ return x.id!==id; })); renderVentas();
+  if (!v) return;
+  if (!confirm('¿Eliminar esta venta?\n\nCliente: '+v.nombre+'\nProducto: '+v.producto+'\nTotal: '+fmt(v.total)+'\n\nSe revertirá el stock.')) return;
+  if (!confirm('SEGUNDA CONFIRMACIÓN\n\nSe eliminará la venta de '+v.nombre+' por '+fmt(v.total)+'.\n\nQuedará una copia en la Bitácora para poder recuperarla.\n\n¿Continuar?')) return;
+
+  itemDelete(KEYS.ventas, id)
+    .then(function(){ return v.sku ? invAdjust(v.sku, v.cantidad) : null; })
+    .then(function(){ return recargarCache(); })
+    .then(function(){ renderVentas(); renderInventario(); renderInvStats(); alert('Venta eliminada. Puede recuperarla desde la Bitácora.'); })
+    .catch(function(e){ errorGuardado(null, e); });
 }
 
 // ================================================================
@@ -1305,16 +1519,14 @@ function guardarEdicionVenta() {
     if (!confirm('El total pagado ('+fmt(pagado)+') no coincide con el total ('+fmt(total)+'). ¿Continuar?')) return;
   }
 
-  // Ajustar inventario
+  // Ajustes de inventario a aplicar de forma atomica en el servidor
+  var ajustesInv = [];
   if (sku === evSkuOriginal) {
-    inv[sku].stock = stockBase - cant;
+    ajustesInv.push({ sku: sku, delta: evCantOriginal - cant });
   } else {
-    // Devolver al SKU original
-    if (inv[evSkuOriginal]) inv[evSkuOriginal].stock += evCantOriginal;
-    // Descontar del nuevo
-    inv[sku].stock -= cant;
+    ajustesInv.push({ sku: evSkuOriginal, delta: evCantOriginal });
+    ajustesInv.push({ sku: sku, delta: -cant });
   }
-  setInventario(inv);
 
   // Actualizar venta
   var ventas = DB.get(KEYS.ventas);
@@ -1322,7 +1534,7 @@ function guardarEdicionVenta() {
   if (idx===-1) return;
 
   var vOld = ventas[idx];
-  ventas[idx] = {
+  var ventaEditada = {
     id:        vOld.id,
     fecha:     fecha,
     nombre:    nombre,
@@ -1346,11 +1558,21 @@ function guardarEdicionVenta() {
     obs:       val('ev-obs'),
     abonos:    vOld.abonos || []   // conservar abonos posteriores
   };
-  DB.set(KEYS.ventas, ventas);
 
-  cerrarEditorVenta();
-  renderVentas();
-  alert('✅ Venta actualizada correctamente.');
+  // Guardado atomico: solo se envia ESTA venta, no la lista completa.
+  itemUpdate(KEYS.ventas, ventaEditada)
+    .then(function(){
+      return ajustesInv.reduce(function(p, a){
+        return p.then(function(){ return a.delta ? invAdjust(a.sku, a.delta) : null; });
+      }, Promise.resolve());
+    })
+    .then(function(){ return recargarCache(); })
+    .then(function(){
+      cerrarEditorVenta();
+      renderVentas(); renderInventario(); renderInvStats();
+      alert('✅ Venta actualizada y confirmada por el servidor.');
+    })
+    .catch(function(e){ errorGuardado('edit-venta-alert', e); });
 }
 
 // ================================================================
@@ -1458,16 +1680,21 @@ function confirmarAbono() {
   if (valor>saldo+0.01){ showAlert('abono-alert','⚠ El abono supera el saldo ('+fmt(saldo)+')','error'); return; }
   if (!ventas[idx].abonos) ventas[idx].abonos=[];
   ventas[idx].abonos.push({ fecha:val('abono-fecha'), valor:valor, forma:val('abono-forma') });
-  DB.set(KEYS.ventas, ventas);
-  cerrarModalAbono(); renderCartera(); renderCarteraStats();
+  itemUpdate(KEYS.ventas, ventas[idx])
+    .then(function(){ return recargarCache(); })
+    .then(function(){ cerrarModalAbono(); renderCartera(); renderCarteraStats(); })
+    .catch(function(e){ errorGuardado('abono-alert', e); });
 }
 
 function eliminarAbono(ventaId, abonoIdx) {
   if (!confirm('¿Eliminar este abono?')) return;
   var ventas=DB.get(KEYS.ventas), idx=-1; ventas.forEach(function(x,i){ if(x.id===ventaId) idx=i; });
   if (idx===-1) return;
-  ventas[idx].abonos.splice(abonoIdx,1); DB.set(KEYS.ventas,ventas);
-  renderCartera(); renderCarteraStats();
+  ventas[idx].abonos.splice(abonoIdx,1);
+  itemUpdate(KEYS.ventas, ventas[idx])
+    .then(function(){ return recargarCache(); })
+    .then(function(){ renderCartera(); renderCarteraStats(); })
+    .catch(function(e){ errorGuardado(null, e); });
 }
 
 // ================================================================
@@ -1477,9 +1704,13 @@ function guardarGasto() {
   var fecha=val('g-fecha'), concepto=val('g-concepto').trim(), valor=parseFloat(val('g-valor'));
   if (!fecha||!concepto||!valor){ showAlert('gasto-alert','⚠ Complete los campos obligatorios','error'); return; }
   var g={ id:Date.now(), fecha:fecha, concepto:concepto, categoria:val('g-categoria'), valor:valor, formapago:val('g-formapago'), comprobante:val('g-comprobante') };
-  var gastos=DB.get(KEYS.gastos); gastos.push(g); DB.set(KEYS.gastos,gastos);
-  showAlert('gasto-alert','✅ Gasto de '+fmt(valor)+' registrado');
-  limpiarGasto(); renderGastos();
+  itemAdd(KEYS.gastos, g)
+    .then(function(){ return recargarCache(); })
+    .then(function(){
+      showAlert('gasto-alert','✅ Gasto de '+fmt(valor)+' registrado y confirmado por el servidor');
+      limpiarGasto(); renderGastos();
+    })
+    .catch(function(e){ errorGuardado('gasto-alert', e); });
 }
 
 function limpiarGasto() { setVal('g-fecha',today()); setVal('g-concepto',''); setVal('g-valor',''); setVal('g-comprobante',''); }
@@ -1501,8 +1732,11 @@ function renderGastos() {
 }
 
 function eliminarGasto(id) {
-  if (!confirm('¿Eliminar este gasto?')) return;
-  DB.set(KEYS.gastos, DB.get(KEYS.gastos).filter(function(g){ return g.id!==id; })); renderGastos();
+  if (!confirm('¿Eliminar este gasto?\n\nQuedará una copia en la Bitácora.')) return;
+  itemDelete(KEYS.gastos, id)
+    .then(function(){ return recargarCache(); })
+    .then(function(){ renderGastos(); })
+    .catch(function(e){ errorGuardado(null, e); });
 }
 
 // ================================================================
@@ -1773,7 +2007,10 @@ function eliminarAjuste(id) {
 }
 
 function borrarVentasGastos() {
-  if (!confirm('¿Borrar todas las ventas y gastos?\n\nEl inventario y productos NO se tocarán.\n\nEsta acción NO se puede deshacer.')) return;
+  var nV = DB.get(KEYS.ventas).length, nG = DB.get(KEYS.gastos).length;
+  if (!confirm('¿Borrar TODAS las ventas y gastos?\n\nSe eliminarán ' + nV + ' ventas y ' + nG + ' gastos.\n\nEl inventario y productos NO se tocarán.')) return;
+  var r = prompt('Para confirmar, escriba exactamente:  BORRAR\n\n(Quedará copia completa en la Bitácora)');
+  if (r !== 'BORRAR') { alert('Cancelado. No se borró nada.'); return; }
   var payload = {};
   payload[KEYS.ventas] = [];
   payload[KEYS.gastos] = [];
@@ -1782,8 +2019,9 @@ function borrarVentasGastos() {
 }
 
 function borrarTodosLosDatos() {
-  if (!confirm('⚠️ ¿Estás seguro de que quieres borrar TODOS los datos?\n\nSe eliminarán productos, ventas, gastos e inventario.\n\nEsta acción NO se puede deshacer.')) return;
-  if (!confirm('Segunda confirmación: ¿Borrar todo definitivamente?')) return;
+  if (!confirm('⚠️ ¿Estás seguro de que quieres borrar TODOS los datos?\n\nSe eliminarán productos, ventas, gastos e inventario.')) return;
+  var r = prompt('Para confirmar, escriba exactamente:  BORRAR TODO\n\n(Quedará copia completa en la Bitácora)');
+  if (r !== 'BORRAR TODO') { alert('Cancelado. No se borró nada.'); return; }
   var empty = {};
   Object.values(KEYS).forEach(function(k){ empty[k] = []; });
   empty[KEYS.inventario] = {};
