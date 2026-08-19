@@ -666,6 +666,7 @@ function refrescarVistas() {
   _try(renderVentas);     _try(renderVentasStats);
   _try(renderCartera);    _try(renderCarteraStats);
   _try(renderGastos);     _try(renderHistorial);
+  _try(renderReportes);   // arrastra Caja y Extracto de efectivo
 }
 
 // Aviso claro cuando algo NO se guardo. Antes fallaba en silencio.
@@ -1991,19 +1992,29 @@ function registrarAjuste() {
   var valor   = parseFloat(val('aj-valor')) || 0;
   if (!concepto) { el('aj-alert').innerHTML='<span style="color:red;font-size:13px">⚠ Ingrese un concepto</span>'; return; }
   if (valor <= 0) { el('aj-alert').innerHTML='<span style="color:red;font-size:13px">⚠ Ingrese un valor mayor a 0</span>'; return; }
-  var ajustes = DB.get(KEYS.ajustes);
-  ajustes.push({ id: Date.now(), fecha: fecha, concepto: concepto, valor: valor });
-  DB.set(KEYS.ajustes, ajustes);
-  setVal('aj-concepto',''); setVal('aj-valor','');
-  el('aj-alert').innerHTML='<span style="color:green;font-size:13px">✅ Ajuste registrado</span>';
-  setTimeout(function(){ el('aj-alert').innerHTML=''; }, 2000);
-  renderReportes();
+  var aj = { id: Date.now(), fecha: fecha, concepto: concepto, valor: valor };
+  itemAdd(KEYS.ajustes, aj)
+    .then(function(){ return recargarCache(); })
+    .then(function(){
+      setVal('aj-concepto',''); setVal('aj-valor','');
+      el('aj-alert').innerHTML='<span style="color:green;font-size:13px">✅ Ajuste registrado y confirmado</span>';
+      setTimeout(function(){ el('aj-alert').innerHTML=''; }, 3000);
+      renderReportes();
+    })
+    .catch(function(e){
+      el('aj-alert').innerHTML='<span style="color:red;font-size:13px">❌ NO SE GUARDÓ: '+
+        (e && e.message ? e.message : 'error de conexión')+'</span>';
+    });
 }
 
 function eliminarAjuste(id) {
-  if (!confirm('¿Eliminar este ajuste?')) return;
-  DB.set(KEYS.ajustes, DB.get(KEYS.ajustes).filter(function(a){ return a.id !== id; }));
-  renderReportes();
+  var a = null; DB.get(KEYS.ajustes).forEach(function(x){ if(x.id===id) a=x; });
+  if (!a) return;
+  if (!confirm('¿Eliminar este ajuste?\n\n'+a.concepto+' — '+fmt(a.valor)+'\n\nQuedará copia en la Bitácora.')) return;
+  itemDelete(KEYS.ajustes, id)
+    .then(function(){ return recargarCache(); })
+    .then(function(){ renderReportes(); })
+    .catch(function(e){ errorGuardado(null, e); });
 }
 
 function borrarVentasGastos() {
