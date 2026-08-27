@@ -326,8 +326,9 @@
     <h2>📋 Historial de Ventas</h2>
     <div class="search-bar" style="flex-wrap:wrap;gap:8px">
       <input type="text" id="ventas-search" placeholder="🔍 Buscar por nombre, SKU, teléfono..." style="min-width:220px">
-      <input type="date" id="ventas-fecha-desde" title="Desde">
-      <input type="date" id="ventas-fecha-hasta" title="Hasta">
+      <input type="month" id="ventas-mes" title="Filtrar por mes" onchange="filtrarPorMes()">
+      <input type="date" id="ventas-fecha-desde" title="Desde" onchange="el('ventas-mes').value=''">
+      <input type="date" id="ventas-fecha-hasta" title="Hasta" onchange="el('ventas-mes').value=''">
       <select id="ventas-filter">
         <option value="">Todos los tipos</option><option value="Contado">Contado</option><option value="Crédito">Crédito</option>
       </select>
@@ -337,12 +338,27 @@
       <button class="btn btn-primary btn-sm" onclick="renderVentas()">🔍 Buscar</button>
       <button class="btn btn-warning btn-sm" onclick="limpiarFiltrosVentas()">✕ Limpiar</button>
     </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
+      <span style="font-size:12px;color:var(--muted);font-weight:600">Atajos:</span>
+      <button class="btn btn-sm" onclick="rangoRapido('mes')">Este mes</button>
+      <button class="btn btn-sm" onclick="rangoRapido('mesPasado')">Mes pasado</button>
+      <button class="btn btn-sm" onclick="rangoRapido('trimestre')">Últimos 3 meses</button>
+      <button class="btn btn-sm" onclick="rangoRapido('anio')">Este año</button>
+      <button class="btn btn-sm" onclick="rangoRapido('todo')">Todo</button>
+    </div>
     <div id="ventas-resumen" style="display:none;padding:8px 12px;background:#eaf4ef;border-radius:6px;font-size:13px;margin-bottom:10px"></div>
     <div id="ventas-resumen-metodos" style="margin-bottom:10px"></div>
     <div class="table-wrap"><table>
       <thead><tr><th>Fecha</th><th>Canal</th><th>Cliente</th><th>SKU</th><th>Producto</th><th>Cant.</th><th>Total</th><th>Costo</th><th>Utilidad</th><th>Pagado</th><th>Saldo</th><th>Tipo</th><th>Pagos</th><th>Acciones</th></tr></thead>
       <tbody id="ventas-body"></tbody>
+      <tfoot id="ventas-foot" style="background:#eaf4ef;font-weight:700;border-top:2px solid var(--primary)"></tfoot>
     </table></div>
+
+    <!-- TOTAL DE GANANCIAS DEL FILTRO ACTUAL -->
+    <div id="ventas-totales" style="margin-top:16px;border:2px solid #16a085;border-radius:10px;padding:16px;background:linear-gradient(135deg,#f0fbf8,#ffffff)">
+      <div id="ventas-totales-titulo" style="font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:12px"></div>
+      <div id="ventas-totales-cifras" style="display:flex;flex-wrap:wrap;gap:20px;align-items:flex-end"></div>
+    </div>
   </div>
 </div>
 
@@ -1265,8 +1281,48 @@ function limpiarVenta() {
 
 function limpiarFiltrosVentas() {
   setVal('ventas-search',''); setVal('ventas-fecha-desde',''); setVal('ventas-fecha-hasta','');
+  setVal('ventas-mes','');
   el('ventas-filter').value=''; el('ventas-canal-filter').value='';
   el('ventas-resumen').style.display='none';
+  renderVentas();
+}
+
+// Al elegir un mes, se calculan automaticamente el primer y ultimo dia.
+function filtrarPorMes() {
+  var m = val('ventas-mes');
+  if (!m) { renderVentas(); return; }
+  var a = parseInt(m.slice(0,4),10), mes = parseInt(m.slice(5,7),10);
+  var ultimo = new Date(a, mes, 0).getDate();   // dia 0 del mes siguiente
+  setVal('ventas-fecha-desde', m + '-01');
+  setVal('ventas-fecha-hasta', m + '-' + String(ultimo).padStart(2,'0'));
+  renderVentas();
+}
+
+function rangoRapido(cual) {
+  var hoy = new Date();
+  var a = hoy.getFullYear(), m = hoy.getMonth();  // 0-11
+  var iso = function(d){
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  };
+  setVal('ventas-mes','');
+  if (cual === 'todo') {
+    setVal('ventas-fecha-desde',''); setVal('ventas-fecha-hasta','');
+  } else if (cual === 'mes') {
+    setVal('ventas-fecha-desde', iso(new Date(a, m, 1)));
+    setVal('ventas-fecha-hasta', iso(new Date(a, m+1, 0)));
+    setVal('ventas-mes', a+'-'+String(m+1).padStart(2,'0'));
+  } else if (cual === 'mesPasado') {
+    setVal('ventas-fecha-desde', iso(new Date(a, m-1, 1)));
+    setVal('ventas-fecha-hasta', iso(new Date(a, m, 0)));
+    var d = new Date(a, m-1, 1);
+    setVal('ventas-mes', d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));
+  } else if (cual === 'trimestre') {
+    setVal('ventas-fecha-desde', iso(new Date(a, m-2, 1)));
+    setVal('ventas-fecha-hasta', iso(new Date(a, m+1, 0)));
+  } else if (cual === 'anio') {
+    setVal('ventas-fecha-desde', a+'-01-01');
+    setVal('ventas-fecha-hasta', a+'-12-31');
+  }
   renderVentas();
 }
 
@@ -1344,7 +1400,11 @@ function renderVentas() {
   hmDiv += '</div>';
   el('ventas-resumen-metodos').innerHTML = hmDiv;
 
-  if (!list.length){ el('ventas-body').innerHTML='<tr><td colspan="14" style="text-align:center;color:var(--muted);padding:16px">Sin ventas que coincidan con la búsqueda</td></tr>'; return; }
+  if (!list.length){
+    el('ventas-body').innerHTML='<tr><td colspan="14" style="text-align:center;color:var(--muted);padding:16px">Sin ventas que coincidan con la búsqueda</td></tr>';
+    renderTotalesVentas([]);
+    return;
+  }
   var h=''; list.forEach(function(v){
     var totalAb = (v.abono||0) + (v.abonos||[]).reduce(function(s,a){ return s+a.valor; },0);
     var saldoR  = Math.max(0, v.total - totalAb);
@@ -1381,6 +1441,75 @@ function renderVentas() {
     h+='</tr>';
   });
   el('ventas-body').innerHTML = h;
+  renderTotalesVentas(list);
+}
+
+// Totales del conjunto que se esta viendo: al pie de la tabla y en el panel.
+function renderTotalesVentas(list) {
+  var nV=0, uds=0, tVenta=0, tCosto=0, tUtil=0, tPagado=0, tSaldo=0, hayAprox=false, sinCosto=0;
+  list.forEach(function(v){
+    var u = utilidadVenta(v);
+    var ab = (v.abono||0) + (v.abonos||[]).reduce(function(s,a){ return s+a.valor; },0);
+    nV++; uds += (v.cantidad||0);
+    tVenta  += (v.total||0);
+    tPagado += ab;
+    tSaldo  += Math.max(0, (v.total||0) - ab);
+    if (u.sinCosto) { sinCosto++; }
+    else { tCosto += u.costo; tUtil += u.utilidad; if(!u.exacto) hayAprox = true; }
+  });
+  var margen = tVenta ? (tUtil/tVenta*100) : 0;
+  var marca  = hayAprox ? '~' : '';
+  var colorU = tUtil>=0 ? 'var(--success)' : 'var(--danger)';
+
+  // Fila de totales al pie de la tabla
+  el('ventas-foot').innerHTML = nV ?
+    ('<tr>'+
+     '<td colspan="5" style="text-align:right">TOTALES ('+nV+' ventas)</td>'+
+     '<td>'+uds+'</td>'+
+     '<td>'+fmt(tVenta)+'</td>'+
+     '<td style="color:var(--muted)">'+marca+fmt(tCosto)+'</td>'+
+     '<td style="color:'+colorU+'">'+marca+fmt(tUtil)+'<br><small>'+margen.toFixed(1)+'%</small></td>'+
+     '<td>'+fmt(tPagado)+'</td>'+
+     '<td>'+fmt(tSaldo)+'</td>'+
+     '<td colspan="3"></td>'+
+     '</tr>') : '';
+
+  // Panel grande de ganancias
+  var desde = val('ventas-fecha-desde'), hasta = val('ventas-fecha-hasta');
+  var mes   = val('ventas-mes');
+  var periodo;
+  if (mes) {
+    var nm = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    periodo = nm[parseInt(mes.slice(5,7),10)] + ' ' + mes.slice(0,4);
+  } else if (desde && hasta) periodo = 'Del ' + desde + ' al ' + hasta;
+  else if (desde)            periodo = 'Desde ' + desde;
+  else if (hasta)            periodo = 'Hasta ' + hasta;
+  else                       periodo = 'Todas las ventas';
+
+  var extras = [];
+  var q = val('ventas-search'), tf = el('ventas-filter').value, cf = el('ventas-canal-filter').value;
+  if (q)  extras.push('búsqueda "'+q+'"');
+  if (tf) extras.push(tf);
+  if (cf) extras.push('canal '+cf);
+
+  el('ventas-totales-titulo').textContent =
+    '💰 Ganancias — ' + periodo + (extras.length ? ' · ' + extras.join(' · ') : '') + ' · ' + nV + ' ventas';
+
+  var bloque = function(lbl, valor, color, size) {
+    return '<div><div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase">'+lbl+'</div>'+
+           '<div style="font-size:'+(size||'20px')+';font-weight:800;color:'+color+';line-height:1.2">'+valor+'</div></div>';
+  };
+  el('ventas-totales-cifras').innerHTML =
+    bloque('Ventas', fmt(tVenta), 'var(--primary)') +
+    '<div style="font-size:22px;color:var(--muted)">−</div>' +
+    bloque('Costo mercancía', marca+fmt(tCosto), 'var(--danger)') +
+    '<div style="font-size:22px;color:var(--muted)">=</div>' +
+    bloque('GANANCIA', marca+fmt(tUtil), colorU, '30px') +
+    bloque('Margen', margen.toFixed(1)+'%', colorU) +
+    bloque('Recibido', fmt(tPagado), 'var(--success)') +
+    bloque('Por cobrar', fmt(tSaldo), tSaldo>0?'var(--danger)':'var(--muted)') +
+    (sinCosto ? '<div style="font-size:11px;color:var(--muted);max-width:150px">'+sinCosto+' venta(s) sin costo, excluidas</div>' : '') +
+    (hayAprox ? '<div style="font-size:11px;color:#b45309;max-width:170px">~ incluye ventas con costo estimado</div>' : '');
 }
 
 function eliminarVenta(id) {
