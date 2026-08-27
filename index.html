@@ -340,7 +340,7 @@
     <div id="ventas-resumen" style="display:none;padding:8px 12px;background:#eaf4ef;border-radius:6px;font-size:13px;margin-bottom:10px"></div>
     <div id="ventas-resumen-metodos" style="margin-bottom:10px"></div>
     <div class="table-wrap"><table>
-      <thead><tr><th>Fecha</th><th>Canal</th><th>Cliente</th><th>SKU</th><th>Producto</th><th>Cant.</th><th>Total</th><th>Pagado</th><th>Saldo</th><th>Tipo</th><th>Pagos</th><th>Acciones</th></tr></thead>
+      <thead><tr><th>Fecha</th><th>Canal</th><th>Cliente</th><th>SKU</th><th>Producto</th><th>Cant.</th><th>Total</th><th>Costo</th><th>Utilidad</th><th>Pagado</th><th>Saldo</th><th>Tipo</th><th>Pagos</th><th>Acciones</th></tr></thead>
       <tbody id="ventas-body"></tbody>
     </table></div>
   </div>
@@ -429,6 +429,25 @@
     <div class="card"><h2>📡 Ventas por Canal</h2>
       <div class="table-wrap"><table><thead><tr><th>Canal</th><th>N°</th><th>Total</th></tr></thead><tbody id="rep-canal"></tbody></table></div>
     </div>
+    <!-- RENTABILIDAD -->
+    <div class="card" style="grid-column:1/-1;border-left:5px solid #16a085">
+      <h2>💹 Rentabilidad — Utilidad por Producto</h2>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">
+        Utilidad = precio de venta − costo de compra. Las filas con <strong>~</strong> son estimadas:
+        son ventas anteriores a esta función, calculadas con el precio de compra actual.
+      </p>
+      <div id="rentab-stats" style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:16px"></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>SKU</th><th>Producto</th><th>Uds.</th><th>Ventas</th><th>Costo</th><th>Utilidad</th><th>Margen</th></tr></thead>
+        <tbody id="rep-rentab"></tbody>
+      </table></div>
+      <h2 style="margin-top:22px">📅 Utilidad por Mes</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Mes</th><th>N° Ventas</th><th>Ventas</th><th>Costo</th><th>Utilidad</th><th>Margen</th></tr></thead>
+        <tbody id="rep-rentab-mes"></tbody>
+      </table></div>
+    </div>
+
     <!-- EFECTIVO separado -->
     <div class="card" style="grid-column:1/-1;border-left:5px solid var(--success)">
       <h2>💵 Caja — Disponible en Efectivo</h2>
@@ -1208,7 +1227,11 @@ function guardarVenta() {
     pagos: pagosVenta.slice(),
     abono: totalPag, saldo: saldo,
     factura: val('v-factura'), obs: val('v-obs'),
-    abonos: []
+    abonos: [],
+    // Costo CONGELADO al momento de la venta. Aunque despues cambie el precio
+    // de compra por una nueva importacion, la utilidad de esta venta no varia.
+    costoUnit:  (inv[sku] && inv[sku].precioCompra) || 0,
+    costoTotal: ((inv[sku] && inv[sku].precioCompra) || 0) * cant
   };
 
   // Guardado atomico: el servidor agrega ESTA venta a lo que ya tiene guardado.
@@ -1281,7 +1304,13 @@ function renderVentas() {
   if (q || f || canal || desde || hasta) {
     var totalFiltrado = list.reduce(function(s,v){ return s+v.total; },0);
     el('ventas-resumen').style.display = '';
-    el('ventas-resumen').innerHTML = '📊 <strong>'+list.length+'</strong> ventas encontradas &nbsp;|&nbsp; Total: <strong>'+fmt(totalFiltrado)+'</strong>';
+    var utilFiltrada = 0, costoFiltrado = 0;
+    list.forEach(function(v){ var u=utilidadVenta(v); if(!u.sinCosto){ utilFiltrada+=u.utilidad; costoFiltrado+=u.costo; } });
+    var margenF = totalFiltrado ? (utilFiltrada/totalFiltrado*100) : 0;
+    el('ventas-resumen').innerHTML = '📊 <strong>'+list.length+'</strong> ventas encontradas &nbsp;|&nbsp; Total: <strong>'+fmt(totalFiltrado)+
+      '</strong> &nbsp;|&nbsp; Costo: <strong>'+fmt(costoFiltrado)+
+      '</strong> &nbsp;|&nbsp; 💰 Utilidad: <strong style="color:'+(utilFiltrada>=0?'var(--success)':'var(--danger)')+'">'+
+      fmt(utilFiltrada)+' ('+margenF.toFixed(1)+'%)</strong>';
   } else {
     el('ventas-resumen').style.display = 'none';
   }
@@ -1315,7 +1344,7 @@ function renderVentas() {
   hmDiv += '</div>';
   el('ventas-resumen-metodos').innerHTML = hmDiv;
 
-  if (!list.length){ el('ventas-body').innerHTML='<tr><td colspan="12" style="text-align:center;color:var(--muted);padding:16px">Sin ventas que coincidan con la búsqueda</td></tr>'; return; }
+  if (!list.length){ el('ventas-body').innerHTML='<tr><td colspan="14" style="text-align:center;color:var(--muted);padding:16px">Sin ventas que coincidan con la búsqueda</td></tr>'; return; }
   var h=''; list.forEach(function(v){
     var totalAb = (v.abono||0) + (v.abonos||[]).reduce(function(s,a){ return s+a.valor; },0);
     var saldoR  = Math.max(0, v.total - totalAb);
@@ -1330,6 +1359,17 @@ function renderVentas() {
     h+='<td>'+v.producto+'</td>';
     h+='<td>'+v.cantidad+'</td>';
     h+='<td>'+fmt(v.total)+'</td>';
+    var u = utilidadVenta(v);
+    if (u.sinCosto) {
+      h+='<td style="color:var(--muted)">sin costo</td>';
+      h+='<td style="color:var(--muted)">-</td>';
+    } else {
+      var uc = u.utilidad >= 0 ? 'var(--success)' : 'var(--danger)';
+      var marca = u.exacto ? '' : '~';
+      h+='<td style="color:var(--muted)">'+marca+fmt(u.costo)+'</td>';
+      h+='<td style="color:'+uc+';font-weight:700">'+marca+fmt(u.utilidad)+
+         '<br><small style="font-weight:400">'+u.margen.toFixed(1)+'%</small></td>';
+    }
     h+='<td>'+fmt(totalAb)+'</td>';
     h+='<td class="'+sc+'">'+fmt(saldoR)+'</td>';
     h+='<td><span class="badge '+tb+'">'+v.tipo+'</span></td>';
@@ -1557,7 +1597,15 @@ function guardarEdicionVenta() {
     saldo:     saldo,
     factura:   val('ev-factura'),
     obs:       val('ev-obs'),
-    abonos:    vOld.abonos || []   // conservar abonos posteriores
+    abonos:    vOld.abonos || [],  // conservar abonos posteriores
+    // Conservar el costo original de la venta. Solo se recalcula si cambio el
+    // producto o la cantidad; asi editar un telefono no altera la utilidad.
+    costoUnit:  (sku === evSkuOriginal && vOld.costoUnit !== undefined)
+                  ? vOld.costoUnit
+                  : ((inv[sku] && inv[sku].precioCompra) || 0),
+    costoTotal: ((sku === evSkuOriginal && vOld.costoUnit !== undefined)
+                  ? vOld.costoUnit
+                  : ((inv[sku] && inv[sku].precioCompra) || 0)) * cant
   };
 
   // Guardado atomico: solo se envia ESTA venta, no la lista completa.
@@ -1584,6 +1632,31 @@ function _totalRecibido(ventas) {
     return s+v.total;
   },0);
 }
+// ================================================================
+// UTILIDAD POR VENTA
+// ================================================================
+// Costo de una venta. Prioriza el costo congelado al momento de venderla.
+// Las ventas viejas no lo tienen: para esas se usa el precio de compra actual
+// del SKU y se marcan como estimadas (~).
+function utilidadVenta(v) {
+  var costo, exacto;
+  if (v.costoTotal !== undefined && v.costoTotal !== null) {
+    costo = v.costoTotal; exacto = true;
+  } else {
+    var inv = getInventario();
+    var pc = (inv[v.sku] && inv[v.sku].precioCompra) || 0;
+    costo = pc * (v.cantidad || 0); exacto = false;
+  }
+  var util = (v.total || 0) - costo;
+  return {
+    costo: costo,
+    utilidad: util,
+    margen: v.total ? (util / v.total * 100) : 0,
+    exacto: exacto,
+    sinCosto: costo === 0
+  };
+}
+
 function renderVentasStats() {
   var ventas=DB.get(KEYS.ventas);
   var tv=ventas.reduce(function(s,v){ return s+v.total; },0);
@@ -1593,7 +1666,15 @@ function renderVentasStats() {
     '<div class="stat-card"><div class="stat-label">N° Ventas</div><div class="stat-value">'+ventas.length+'</div></div>'+
     '<div class="stat-card blue"><div class="stat-label">Total Facturado</div><div class="stat-value">'+fmt(tv)+'</div></div>'+
     '<div class="stat-card accent"><div class="stat-label">💰 Total Recibido</div><div class="stat-value">'+fmt(tr)+'</div></div>'+
-    '<div class="stat-card danger"><div class="stat-label">Saldo Pendiente</div><div class="stat-value">'+fmt(Math.max(0,pend))+'</div></div>';
+    '<div class="stat-card danger"><div class="stat-label">Saldo Pendiente</div><div class="stat-value">'+fmt(Math.max(0,pend))+'</div></div>'+
+    (function(){
+      var u=0, c=0;
+      ventas.forEach(function(v){ var x=utilidadVenta(v); if(!x.sinCosto){ u+=x.utilidad; c+=x.costo; } });
+      var m = tv ? (u/tv*100) : 0;
+      return '<div class="stat-card" style="border-left-color:#16a085"><div class="stat-label">📈 Utilidad (Ventas − Costo)</div>'+
+             '<div class="stat-value" style="color:'+(u>=0?'var(--success)':'var(--danger)')+'">'+fmt(u)+
+             '</div><div style="font-size:12px;color:var(--muted);margin-top:2px">Margen '+m.toFixed(1)+'% · Costo '+fmt(c)+'</div></div>';
+    })();
 }
 
 // CARTERA
@@ -1777,7 +1858,73 @@ function renderReportes() {
   ventas.forEach(function(v){ var c=v.canal||'Sin canal'; if(!vxc[c]) vxc[c]={n:0,t:0}; vxc[c].n++; vxc[c].t+=v.total; });
   var hC=''; Object.keys(vxc).sort(function(a,b){ return vxc[b].t-vxc[a].t; }).forEach(function(c){ hC+='<tr><td>'+c+'</td><td>'+vxc[c].n+'</td><td>'+fmt(vxc[c].t)+'</td></tr>'; });
   el('rep-canal').innerHTML=hC||'<tr><td colspan="3" style="text-align:center;color:var(--muted)">Sin datos</td></tr>';
+
+  renderRentabilidad(ventas);
   renderCaja();
+}
+
+function renderRentabilidad(ventas) {
+  var porSku = {}, porMes = {};
+  var totV = 0, totC = 0, totU = 0, nEstimadas = 0, nSinCosto = 0;
+
+  ventas.forEach(function(v) {
+    var u = utilidadVenta(v);
+    if (u.sinCosto) { nSinCosto++; return; }
+    if (!u.exacto) nEstimadas++;
+
+    var k = v.sku || 'Sin SKU';
+    if (!porSku[k]) porSku[k] = { nombre: v.producto||'', uds:0, venta:0, costo:0, aprox:false };
+    porSku[k].uds   += (v.cantidad||0);
+    porSku[k].venta += (v.total||0);
+    porSku[k].costo += u.costo;
+    if (!u.exacto) porSku[k].aprox = true;
+
+    var m = (v.fecha||'').slice(0,7);
+    if (!porMes[m]) porMes[m] = { n:0, venta:0, costo:0 };
+    porMes[m].n++; porMes[m].venta += (v.total||0); porMes[m].costo += u.costo;
+
+    totV += (v.total||0); totC += u.costo; totU += u.utilidad;
+  });
+
+  var margenTot = totV ? (totU/totV*100) : 0;
+  var tarjeta = function(lbl, val, color, extra) {
+    return '<div style="background:white;border-radius:10px;border:1px solid var(--border);padding:16px;min-width:170px;border-left:4px solid '+color+';box-shadow:0 1px 4px rgba(0,0,0,.07)">'+
+           '<div class="stat-label">'+lbl+'</div><div class="stat-value" style="color:'+color+'">'+val+'</div>'+
+           (extra?'<div style="font-size:11px;color:var(--muted);margin-top:3px">'+extra+'</div>':'')+'</div>';
+  };
+  el('rentab-stats').innerHTML =
+    tarjeta('Ventas (con costo)', fmt(totV), 'var(--primary)', '') +
+    tarjeta('Costo de lo vendido', fmt(totC), 'var(--danger)', '') +
+    tarjeta('💰 Utilidad', fmt(totU), totU>=0?'var(--success)':'var(--danger)', 'Margen '+margenTot.toFixed(1)+'%') +
+    tarjeta('Estimadas', nEstimadas+'', '#b45309', 'ventas sin costo congelado') +
+    (nSinCosto ? tarjeta('Sin costo', nSinCosto+'', 'var(--muted)', 'excluidas del cálculo') : '');
+
+  var hR = '';
+  Object.keys(porSku).sort(function(a,b){
+    return (porSku[b].venta-porSku[b].costo) - (porSku[a].venta-porSku[a].costo);
+  }).forEach(function(s) {
+    var d = porSku[s];
+    var util = d.venta - d.costo;
+    var mg = d.venta ? (util/d.venta*100) : 0;
+    var marca = d.aprox ? '~' : '';
+    hR += '<tr><td><strong>'+s+'</strong></td><td>'+d.nombre+'</td><td>'+d.uds+'</td>'+
+          '<td>'+fmt(d.venta)+'</td><td style="color:var(--muted)">'+marca+fmt(d.costo)+'</td>'+
+          '<td style="color:'+(util>=0?'var(--success)':'var(--danger)')+';font-weight:700">'+marca+fmt(util)+'</td>'+
+          '<td>'+mg.toFixed(1)+'%</td></tr>';
+  });
+  el('rep-rentab').innerHTML = hR || '<tr><td colspan="7" style="text-align:center;color:var(--muted)">Sin datos</td></tr>';
+
+  var hMes = '';
+  Object.keys(porMes).sort().reverse().forEach(function(m) {
+    var d = porMes[m];
+    var util = d.venta - d.costo;
+    var mg = d.venta ? (util/d.venta*100) : 0;
+    hMes += '<tr><td><strong>'+m+'</strong></td><td>'+d.n+'</td><td>'+fmt(d.venta)+'</td>'+
+            '<td style="color:var(--muted)">'+fmt(d.costo)+'</td>'+
+            '<td style="color:'+(util>=0?'var(--success)':'var(--danger)')+';font-weight:700">'+fmt(util)+'</td>'+
+            '<td>'+mg.toFixed(1)+'%</td></tr>';
+  });
+  el('rep-rentab-mes').innerHTML = hMes || '<tr><td colspan="6" style="text-align:center;color:var(--muted)">Sin datos</td></tr>';
 }
 
 function renderExtracto() {
