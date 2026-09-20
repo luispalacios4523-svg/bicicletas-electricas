@@ -245,6 +245,7 @@
       <div class="form-group"><label>SKU *</label><input type="text" id="p-sku" placeholder="BIC-001" style="text-transform:uppercase"></div>
       <div class="form-group"><label>Nombre del Producto *</label><input type="text" id="p-nombre" placeholder="Nombre descriptivo"></div>
       <div class="form-group"><label>Marca</label><input type="text" id="p-marca" placeholder="Marca del vehículo"></div>
+      <div class="form-group"><label>Potencia</label><input type="text" id="p-potencia" placeholder="Ej: 500W, 1000W"></div>
       <div class="form-group"><label>Categoría</label>
         <select id="p-categoria">
           <option>Bicicleta Eléctrica</option><option>Moto Eléctrica</option>
@@ -328,6 +329,7 @@
     <div class="sec-title">🔧 Identificación del Vehículo <span style="font-weight:400;text-transform:none;color:var(--muted);font-size:12px">— para la tarjeta de propiedad</span></div>
     <div class="form-grid">
       <div class="form-group"><label>Marca</label><input type="text" id="v-marca" placeholder="Marca (se autocompleta por SKU)"></div>
+      <div class="form-group"><label>Potencia</label><input type="text" id="v-potencia" placeholder="Ej: 500W (se autocompleta por SKU)"></div>
       <div class="form-group"><label>Serial de Chasis</label><input type="text" id="v-ser-chasis" placeholder="N° de chasis" style="text-transform:uppercase"></div>
       <div class="form-group"><label>Serial de Motor</label><input type="text" id="v-ser-motor" placeholder="N° de motor" style="text-transform:uppercase"></div>
       <div class="form-group"><label>Serial de Batería</label><input type="text" id="v-ser-bateria" placeholder="N° de batería (varias: separar con coma)" style="text-transform:uppercase"></div>
@@ -701,6 +703,7 @@
     <p class="sec-title">🔧 Identificación del Vehículo</p>
     <div class="form-grid">
       <div class="form-group"><label>Marca</label><input type="text" id="ev-marca"></div>
+      <div class="form-group"><label>Potencia</label><input type="text" id="ev-potencia"></div>
       <div class="form-group"><label>Serial de Chasis</label><input type="text" id="ev-ser-chasis" style="text-transform:uppercase"></div>
       <div class="form-group"><label>Serial de Motor</label><input type="text" id="ev-ser-motor" style="text-transform:uppercase"></div>
       <div class="form-group"><label>Serial de Batería</label><input type="text" id="ev-ser-bateria" style="text-transform:uppercase"></div>
@@ -1078,10 +1081,12 @@ function guardarProducto() {
       nombre=val('p-nombre').trim(), cant=parseInt(val('p-cantidad')), valor=parseFloat(val('p-valor'));
   if (!fecha||!prov||!sku||!nombre||!cant||!valor) { showAlert('prod-alert','⚠ Complete los campos obligatorios (*)','error'); return; }
   var e = { id:Date.now(), fecha:fecha, proveedor:prov, factura:val('p-factura'), sku:sku,
-    nombre:nombre, marca:val('p-marca').trim(), categoria:val('p-categoria'), cantidad:cant, valor:valor, total:cant*valor,
+    nombre:nombre, marca:val('p-marca').trim(), potencia:val('p-potencia').trim(),
+    categoria:val('p-categoria'), cantidad:cant, valor:valor, total:cant*valor,
     pventa:parseFloat(val('p-pventa'))||0 };
   var campos = { nombre:nombre, categoria:e.categoria, precioCompra:valor };
-  if (e.marca)  campos.marca = e.marca;
+  if (e.marca)    campos.marca = e.marca;
+  if (e.potencia) campos.potencia = e.potencia;
   if (e.pventa) campos.precioVenta = e.pventa;
 
   itemAdd(KEYS.productos, e)
@@ -1095,7 +1100,7 @@ function guardarProducto() {
 }
 
 function limpiarProd() {
-  ['p-proveedor','p-factura','p-sku','p-nombre','p-marca','p-valor','p-total','p-pventa'].forEach(function(id){ setVal(id,''); });
+  ['p-proveedor','p-factura','p-sku','p-nombre','p-marca','p-potencia','p-valor','p-total','p-pventa'].forEach(function(id){ setVal(id,''); });
   setVal('p-cantidad',1); setVal('p-fecha',today());
 }
 
@@ -1251,8 +1256,9 @@ function buscarSKU() {
   var inv = getInventario();
   if (inv[sku]) {
     setVal('v-producto', inv[sku].nombre); setVal('v-stock', inv[sku].stock);
-    // La marca viene del inventario, pero queda editable por si varia.
-    if (inv[sku].marca && !val('v-marca').trim()) setVal('v-marca', inv[sku].marca);
+    // Marca y potencia vienen del inventario, pero quedan editables por si varian.
+    if (inv[sku].marca    && !val('v-marca').trim())    setVal('v-marca', inv[sku].marca);
+    if (inv[sku].potencia && !val('v-potencia').trim()) setVal('v-potencia', inv[sku].potencia);
   }
   else { setVal('v-producto',''); setVal('v-stock',''); }
   calcVenta();
@@ -1355,6 +1361,7 @@ function guardarVenta() {
     telefono: val('v-telefono'), correo: val('v-correo'),
     // Identificacion del vehiculo, para la tarjeta de propiedad
     marca:      val('v-marca').trim(),
+    potencia:   val('v-potencia').trim(),
     serChasis:  val('v-ser-chasis').trim().toUpperCase(),
     serMotor:   val('v-ser-motor').trim().toUpperCase(),
     serBateria: val('v-ser-bateria').trim().toUpperCase(),
@@ -1394,7 +1401,7 @@ function guardarVenta() {
 
 function limpiarVenta() {
   ['v-nombre','v-cedula','v-direccion','v-ciudad','v-telefono','v-correo','v-sku','v-producto','v-factura','v-obs',
-   'v-marca','v-ser-chasis','v-ser-motor','v-ser-bateria','v-color'].forEach(function(id){ setVal(id,''); });
+   'v-marca','v-potencia','v-ser-chasis','v-ser-motor','v-ser-bateria','v-color'].forEach(function(id){ setVal(id,''); });
   setVal('v-stock',''); setVal('v-cantidad',1); setVal('v-valor','');
   setVal('v-total',''); setVal('v-iva-val',''); setVal('v-saldo','');
   setVal('v-fecha',today());
@@ -1677,6 +1684,7 @@ function abrirEditorVenta(id) {
   setVal('ev-nombre',    v.nombre||'');
   setVal('ev-cedula',    v.cedula||'');
   setVal('ev-marca',       v.marca||'');
+  setVal('ev-potencia',    v.potencia||'');
   setVal('ev-ser-chasis',  v.serChasis||'');
   setVal('ev-ser-motor',   v.serMotor||'');
   setVal('ev-ser-bateria', v.serBateria||'');
@@ -1723,7 +1731,8 @@ function ev_buscarSKU() {
   // stock disponible = stock real + cantidad original de esta venta
   if (inv[sku]) {
     setVal('ev-producto', inv[sku].nombre);
-    if (inv[sku].marca && !val('ev-marca').trim()) setVal('ev-marca', inv[sku].marca);
+    if (inv[sku].marca    && !val('ev-marca').trim())    setVal('ev-marca', inv[sku].marca);
+    if (inv[sku].potencia && !val('ev-potencia').trim()) setVal('ev-potencia', inv[sku].potencia);
     var extra = (sku === evSkuOriginal) ? evCantOriginal : 0;
     setVal('ev-stock', inv[sku].stock + extra);
   } else {
@@ -1845,6 +1854,7 @@ function guardarEdicionVenta() {
     cedula:    val('ev-cedula').trim(),
     direccion: val('ev-direccion'),
     marca:      val('ev-marca').trim(),
+    potencia:   val('ev-potencia').trim(),
     serChasis:  val('ev-ser-chasis').trim().toUpperCase(),
     serMotor:   val('ev-ser-motor').trim().toUpperCase(),
     serBateria: val('ev-ser-bateria').trim().toUpperCase(),
@@ -2782,7 +2792,7 @@ function _tarjetaHTML(v) {
       '<div class="tp-row">' +
         '<div class="tp-f"><div class="tp-lbl">Marca</div><div class="tp-val">'+f(v.marca)+'</div></div>' +
         '<div class="tp-f"><div class="tp-lbl">Color</div><div class="tp-val">'+f(v.color)+'</div></div>' +
-        '<div class="tp-f"><div class="tp-lbl">Código</div><div class="tp-val mono">'+f(v.sku)+'</div></div>' +
+        '<div class="tp-f"><div class="tp-lbl">Potencia</div><div class="tp-val">'+f(v.potencia)+'</div></div>' +
       '</div>' +
       '<div class="tp-pie">Fecha de compra: '+fechaLarga+' &nbsp;·&nbsp; Factura: '+f(v.factura) +
         ((v.cantidad||1) > 1 ? ' &nbsp;·&nbsp; Cantidad: '+f(v.cantidad) : '') + '</div>' +
@@ -2848,6 +2858,7 @@ function imprimirTarjeta(id) {
 
   var faltan = [];
   if (!v.cedula)     faltan.push('cédula');
+  if (!v.potencia)   faltan.push('potencia');
   if (!v.serChasis)  faltan.push('serial de chasis');
   if (!v.serMotor)   faltan.push('serial de motor');
   if (!v.serBateria) faltan.push('serial de batería');
