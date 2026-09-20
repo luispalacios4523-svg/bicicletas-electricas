@@ -123,6 +123,11 @@
 
   .tp-wrap { display: flex; flex-wrap: wrap; gap: 6mm; }
   .tp-card {
+    /* Obliga al navegador a imprimir los colores tal cual, sin aclararlos
+       ni convertirlos. Sin esto el rojo y el amarillo del logo salen
+       desvaidos en algunas impresoras. */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
     width: 85.6mm; height: 54mm; box-sizing: border-box;
     border: 1px dashed #999; border-radius: 3mm;
     padding: 2.6mm 4mm; overflow: hidden;
@@ -151,7 +156,9 @@
 
   @media print {
     body > *:not(#print-area) { display: none !important; }
-    #print-area { display: block !important; }
+    #print-area { display: block !important;
+                  -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .tp-logo-img { image-rendering: auto; }
     .tp-card { border: 1px dashed #bbb; page-break-inside: avoid; break-inside: avoid; }
     @page { size: auto; margin: 10mm; }
   }
