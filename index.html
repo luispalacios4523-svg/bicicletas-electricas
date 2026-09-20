@@ -137,8 +137,8 @@
   .tp-head { display: flex; align-items: flex-start; gap: 2mm; border-bottom: 0.6mm solid #1a7f4b; padding-bottom: 0.9mm; margin-bottom: 1.2mm; }
   .tp-logo { font-size: 6mm; line-height: 1; }
   .tp-logo-img { height: 16mm; width: auto; max-width: 20mm; object-fit: contain; display: block; flex: none; }
-  .tp-emp  { font-size: 3.1mm; font-weight: 800; letter-spacing: .2px; color: #1a7f4b; text-transform: uppercase; }
-  .tp-tit  { font-size: 2.2mm; font-weight: 700; color: #555; letter-spacing: .6px; text-transform: uppercase; }
+  .tp-emp  { font-size: 3.8mm; font-weight: 800; letter-spacing: .2px; color: #1a7f4b; text-transform: uppercase; }
+  .tp-tit  { font-size: 2.4mm; font-weight: 700; color: #555; letter-spacing: .6px; text-transform: uppercase; }
   .tp-row  { display: flex; gap: 3mm; margin-bottom: 0.8mm; }
   .tp-f    { flex: 1; min-width: 0; }
   .tp-lbl  { font-size: 1.9mm; color: #777; text-transform: uppercase; letter-spacing: .3px; font-weight: 700; }
@@ -150,8 +150,8 @@
   .tp-pie  { position: absolute; left: 4mm; right: 4mm; bottom: 2mm; font-size: 1.9mm; color: #777; border-top: 0.3mm solid #ddd; padding-top: 1mm; }
   .tp-firma { margin-top: 1.6mm; border-top: 0.3mm solid #333; width: 42mm; font-size: 1.9mm; color: #555; padding-top: 0.8mm; }
   /* Datos del almacen bajo el nombre, en el encabezado del frente */
-  .tp-datos { font-size: 1.85mm; color: #444; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tp-datos-larga { white-space: normal; line-height: 1.15; max-height: 4.4mm; }
+  .tp-datos { font-size: 3mm; color: #333; line-height: 1.28; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tp-datos-larga { white-space: normal; line-height: 1.18; max-height: 6.4mm; }
   .tp-cara { position: absolute; top: 2mm; right: 3mm; font-size: 1.8mm; color: #bbb; text-transform: uppercase; letter-spacing: .5px; }
 
   @media print {
@@ -2729,7 +2729,7 @@ function _datosAlmacen() {
   if (dir) {
     // Direcciones largas: letra mas pequeña y hasta dos renglones, sin recortar.
     var cls = dir.length > 44 ? 'tp-datos tp-datos-larga' : 'tp-datos';
-    var fs  = dir.length > 66 ? 1.55 : dir.length > 44 ? 1.7 : 1.85;
+    var fs  = dir.length > 66 ? 2.2 : dir.length > 44 ? 2.6 : 3;
     h += '<div class="'+cls+'" style="font-size:'+fs+'mm">' + _esc(dir) + '</div>';
   }
   return h;
