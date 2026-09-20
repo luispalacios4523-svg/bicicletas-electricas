@@ -476,19 +476,19 @@
         <input type="text" id="cfg-empresa" placeholder="VIGOR ELECTRIC">
       </div>
       <div class="form-group">
-        <label>Logo (PNG o JPG)</label>
+        <label>Logo (se guarda solo al subirlo)</label>
         <label class="btn" style="background:#6c757d;color:white;cursor:pointer;text-align:center">
           📷 Subir logo
           <input type="file" accept="image/*" style="display:none" onchange="subirLogo(this)">
         </label>
       </div>
       <div class="form-group">
-        <label>Vista previa</label>
+        <label>Logo actual (guardado en el servidor)</label>
         <div id="cfg-logo-prev" style="height:52px;display:flex;align-items:center;gap:10px"></div>
       </div>
     </div>
     <div class="btn-row">
-      <button class="btn btn-primary" onclick="guardarIdentidad()">💾 Guardar</button>
+      <button class="btn btn-primary" onclick="guardarIdentidad()">💾 Guardar nombre</button>
       <button class="btn btn-warning" onclick="quitarLogo()">🗑️ Quitar logo</button>
     </div>
     <div id="cfg-alert"></div>
@@ -2514,18 +2514,35 @@ function renderIdentidad() {
 
 function subirLogo(input) {
   var file = input.files[0]; if (!file) return;
-  if (file.size > 800*1024) {
-    showAlert('cfg-alert','⚠ La imagen pesa '+Math.round(file.size/1024)+' KB. Use una de menos de 800 KB.','error');
-    input.value=''; return;
-  }
+  input.value = '';
+  showAlert('cfg-alert','Procesando imagen...');
+
   var r = new FileReader();
+  r.onerror = function(){ showAlert('cfg-alert','❌ No se pudo leer la imagen.','error'); };
   r.onload = function(e) {
-    _cache['bec_logo'] = e.target.result;
-    renderIdentidad();
-    showAlert('cfg-alert','Logo cargado. Pulse <strong>Guardar</strong> para conservarlo.');
+    var img = new Image();
+    img.onerror = function(){ showAlert('cfg-alert','❌ El archivo no es una imagen válida.','error'); };
+    img.onload = function() {
+      // Se reduce a 400 px máx: una foto de celular de 5 MB queda en pocos KB
+      // y el logo cabe sin problema en la base y en los backups.
+      var max = 400;
+      var k = Math.min(1, max / Math.max(img.width, img.height));
+      var w = Math.max(1, Math.round(img.width * k));
+      var h = Math.max(1, Math.round(img.height * k));
+      var c = document.createElement('canvas'); c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      var data;
+      try { data = c.toDataURL('image/png'); }
+      catch (err) { showAlert('cfg-alert','❌ No se pudo procesar la imagen.','error'); return; }
+
+      _cache['bec_logo'] = data;
+      renderIdentidad();
+      // Se guarda de inmediato: no hay que pulsar nada más.
+      guardarIdentidad('✅ Logo guardado ('+w+'×'+h+' px, '+Math.round(data.length/1024)+' KB). Ya sale en todas las tarjetas.');
+    };
+    img.src = e.target.result;
   };
   r.readAsDataURL(file);
-  input.value='';
 }
 
 function quitarLogo() {
@@ -2535,12 +2552,22 @@ function quitarLogo() {
   guardarIdentidad();
 }
 
-function guardarIdentidad() {
+function guardarIdentidad(msgOk) {
   var payload = { bec_empresa: val('cfg-empresa').trim(), bec_logo: _cache['bec_logo'] || '' };
   _cache['bec_empresa'] = payload.bec_empresa;
-  apiPost('/api/save', payload)
+  return apiPost('/api/save', payload)
     .then(function(){ return recargarCache(); })
-    .then(function(){ renderIdentidad(); showAlert('cfg-alert','✅ Guardado. Ya aparece en las tarjetas.'); })
+    .then(function(){
+      // Confirmamos contra lo que quedó en el servidor, no contra la pantalla.
+      var l = _cache['bec_logo'];
+      var guardado = (typeof l === 'string' && l.indexOf('data:image') === 0);
+      renderIdentidad();
+      if (payload.bec_logo && !guardado) {
+        showAlert('cfg-alert','❌ El servidor no conservó el logo. Intente con una imagen más liviana.','error');
+      } else {
+        showAlert('cfg-alert', msgOk || '✅ Guardado. Ya aparece en las tarjetas.');
+      }
+    })
     .catch(function(e){ errorGuardado('cfg-alert', e); });
 }
 
