@@ -117,6 +117,38 @@
   .add-row input { flex: 1; }
 
   @media(max-width:640px) { .form-grid { grid-template-columns: 1fr 1fr; } }
+
+  /* ===== TARJETA DE PROPIEDAD (tamaño carnet CR80: 85.6 x 54 mm) ===== */
+  #print-area { display: none; }
+
+  .tp-wrap { display: flex; flex-wrap: wrap; gap: 6mm; }
+  .tp-card {
+    width: 85.6mm; height: 54mm; box-sizing: border-box;
+    border: 1px dashed #999; border-radius: 3mm;
+    padding: 3.5mm 4mm; overflow: hidden;
+    font-family: Arial, Helvetica, sans-serif; color: #111;
+    background: #fff; position: relative;
+  }
+  .tp-head { display: flex; align-items: center; gap: 2mm; border-bottom: 0.6mm solid #1a7f4b; padding-bottom: 1.4mm; margin-bottom: 2mm; }
+  .tp-logo { font-size: 6mm; line-height: 1; }
+  .tp-emp  { font-size: 3.1mm; font-weight: 800; letter-spacing: .2px; color: #1a7f4b; text-transform: uppercase; }
+  .tp-tit  { font-size: 2.2mm; font-weight: 700; color: #555; letter-spacing: .6px; text-transform: uppercase; }
+  .tp-row  { display: flex; gap: 3mm; margin-bottom: 1.5mm; }
+  .tp-f    { flex: 1; min-width: 0; }
+  .tp-lbl  { font-size: 1.9mm; color: #777; text-transform: uppercase; letter-spacing: .3px; font-weight: 700; }
+  .tp-val  { font-size: 2.9mm; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tp-val.big { font-size: 3.4mm; }
+  .tp-val.mono { font-family: "Courier New", monospace; letter-spacing: .3px; }
+  .tp-pie  { position: absolute; left: 4mm; right: 4mm; bottom: 2.5mm; font-size: 1.9mm; color: #777; border-top: 0.3mm solid #ddd; padding-top: 1.2mm; }
+  .tp-firma { margin-top: 4mm; border-top: 0.3mm solid #333; width: 42mm; font-size: 1.9mm; color: #555; padding-top: 0.8mm; }
+  .tp-cara { position: absolute; top: 2mm; right: 3mm; font-size: 1.8mm; color: #bbb; text-transform: uppercase; letter-spacing: .5px; }
+
+  @media print {
+    body > *:not(#print-area) { display: none !important; }
+    #print-area { display: block !important; }
+    .tp-card { border: 1px dashed #bbb; page-break-inside: avoid; break-inside: avoid; }
+    @page { size: auto; margin: 10mm; }
+  }
 </style>
 </head>
 <body>
@@ -236,6 +268,7 @@
     <div class="sec-title">👤 Datos del Cliente</div>
     <div class="form-grid">
       <div class="form-group"><label>Nombre *</label><input type="text" id="v-nombre" placeholder="Nombre completo"></div>
+      <div class="form-group"><label>Cédula</label><input type="text" id="v-cedula" placeholder="N° de documento"></div>
       <div class="form-group"><label>Dirección</label><input type="text" id="v-direccion" placeholder="Dirección"></div>
       <div class="form-group"><label>Ciudad</label><input type="text" id="v-ciudad" placeholder="Ciudad"></div>
       <div class="form-group"><label>Teléfono</label><input type="tel" id="v-telefono" placeholder="Teléfono"></div>
@@ -276,6 +309,14 @@
         <label>Total Venta ($)</label>
         <input type="number" id="v-total" readonly class="info-field">
       </div>
+    </div>
+
+    <div class="sec-title">🔧 Identificación del Vehículo <span style="font-weight:400;text-transform:none;color:var(--muted);font-size:12px">— para la tarjeta de propiedad</span></div>
+    <div class="form-grid">
+      <div class="form-group"><label>Serial de Chasis</label><input type="text" id="v-ser-chasis" placeholder="N° de chasis" style="text-transform:uppercase"></div>
+      <div class="form-group"><label>Serial de Motor</label><input type="text" id="v-ser-motor" placeholder="N° de motor" style="text-transform:uppercase"></div>
+      <div class="form-group"><label>Serial de Batería</label><input type="text" id="v-ser-bateria" placeholder="N° de batería (varias: separar con coma)" style="text-transform:uppercase"></div>
+      <div class="form-group"><label>Color</label><input type="text" id="v-color" placeholder="Color del vehículo"></div>
     </div>
 
     <div class="sec-title">💳 Pago</div>
@@ -345,6 +386,8 @@
       <button class="btn btn-sm" onclick="rangoRapido('trimestre')">Últimos 3 meses</button>
       <button class="btn btn-sm" onclick="rangoRapido('anio')">Este año</button>
       <button class="btn btn-sm" onclick="rangoRapido('todo')">Todo</button>
+      <span style="flex:1"></span>
+      <button class="btn btn-primary btn-sm" onclick="imprimirTarjetasFiltro()">🪪 Imprimir tarjetas de esta búsqueda</button>
     </div>
     <div id="ventas-resumen" style="display:none;padding:8px 12px;background:#eaf4ef;border-radius:6px;font-size:13px;margin-bottom:10px"></div>
     <div id="ventas-resumen-metodos" style="margin-bottom:10px"></div>
@@ -569,6 +612,7 @@
     <p class="sec-title" style="margin-top:0">👤 Cliente</p>
     <div class="form-grid">
       <div class="form-group"><label>Nombre *</label><input type="text" id="ev-nombre"></div>
+      <div class="form-group"><label>Cédula</label><input type="text" id="ev-cedula"></div>
       <div class="form-group"><label>Teléfono</label><input type="text" id="ev-telefono"></div>
       <div class="form-group"><label>Dirección</label><input type="text" id="ev-direccion"></div>
       <div class="form-group"><label>Ciudad</label><input type="text" id="ev-ciudad"></div>
@@ -593,6 +637,14 @@
       </div>
       <div class="form-group"><label>Valor IVA (info)</label><input type="number" id="ev-iva-val" readonly class="info-field"></div>
       <div class="form-group"><label>Total ($)</label><input type="number" id="ev-total" readonly class="info-field"></div>
+    </div>
+
+    <p class="sec-title">🔧 Identificación del Vehículo</p>
+    <div class="form-grid">
+      <div class="form-group"><label>Serial de Chasis</label><input type="text" id="ev-ser-chasis" style="text-transform:uppercase"></div>
+      <div class="form-group"><label>Serial de Motor</label><input type="text" id="ev-ser-motor" style="text-transform:uppercase"></div>
+      <div class="form-group"><label>Serial de Batería</label><input type="text" id="ev-ser-bateria" style="text-transform:uppercase"></div>
+      <div class="form-group"><label>Color</label><input type="text" id="ev-color"></div>
     </div>
 
     <p class="sec-title">💳 Pago</p>
@@ -1233,8 +1285,14 @@ function guardarVenta() {
 
   var venta = {
     id: Date.now(), fecha: fecha, nombre: nombre,
+    cedula: val('v-cedula').trim(),
     direccion: val('v-direccion'), ciudad: val('v-ciudad'),
     telefono: val('v-telefono'), correo: val('v-correo'),
+    // Identificacion del vehiculo, para la tarjeta de propiedad
+    serChasis:  val('v-ser-chasis').trim().toUpperCase(),
+    serMotor:   val('v-ser-motor').trim().toUpperCase(),
+    serBateria: val('v-ser-bateria').trim().toUpperCase(),
+    color:      val('v-color').trim(),
     canal: val('v-canal'), sku: sku, producto: val('v-producto'),
     cantidad: cant, valor: parseFloat(val('v-valor')),
     ivaPct: parseFloat(val('v-iva-pct'))||0,
@@ -1269,7 +1327,8 @@ function guardarVenta() {
 }
 
 function limpiarVenta() {
-  ['v-nombre','v-direccion','v-ciudad','v-telefono','v-correo','v-sku','v-producto','v-factura','v-obs'].forEach(function(id){ setVal(id,''); });
+  ['v-nombre','v-cedula','v-direccion','v-ciudad','v-telefono','v-correo','v-sku','v-producto','v-factura','v-obs',
+   'v-ser-chasis','v-ser-motor','v-ser-bateria','v-color'].forEach(function(id){ setVal(id,''); });
   setVal('v-stock',''); setVal('v-cantidad',1); setVal('v-valor','');
   setVal('v-total',''); setVal('v-iva-val',''); setVal('v-saldo','');
   setVal('v-fecha',today());
@@ -1411,7 +1470,7 @@ function renderVentas() {
     var sc = saldoR>0?'saldo-pendiente':'saldo-pagado';
     var tb = v.tipo==='Crédito'?'badge-yellow':'badge-green';
     var pagosStr = (v.pagos||[]).map(function(p){ return p.metodo+': '+fmt(p.valor); }).join('<br>') || (v.formapago||'-');
-    h+='<tr>';
+    h+='<tr data-vid="'+v.id+'">';
     h+='<td>'+v.fecha+'</td>';
     h+='<td><span class="badge badge-blue">'+(v.canal||'-')+'</span></td>';
     h+='<td><strong>'+v.nombre+'</strong>'+(v.telefono?'<br><small style="color:var(--muted)">'+v.telefono+'</small>':'')+'</td>';
@@ -1436,6 +1495,7 @@ function renderVentas() {
     h+='<td style="font-size:12px">'+pagosStr+'</td>';
     h+='<td style="white-space:nowrap">';
     h+='<button class="btn btn-warning btn-sm" onclick="abrirEditorVenta('+v.id+')" style="margin-bottom:4px">✏️ Editar</button> ';
+    h+='<button class="btn btn-primary btn-sm" onclick="imprimirTarjeta('+v.id+')" title="Imprimir tarjeta de propiedad" style="margin-bottom:4px">🪪 Tarjeta</button> ';
     h+='<button class="btn btn-danger btn-sm" onclick="eliminarVenta('+v.id+')">✕</button>';
     h+='</td>';
     h+='</tr>';
@@ -1549,6 +1609,11 @@ function abrirEditorVenta(id) {
 
   // Llenar campos
   setVal('ev-nombre',    v.nombre||'');
+  setVal('ev-cedula',    v.cedula||'');
+  setVal('ev-ser-chasis',  v.serChasis||'');
+  setVal('ev-ser-motor',   v.serMotor||'');
+  setVal('ev-ser-bateria', v.serBateria||'');
+  setVal('ev-color',       v.color||'');
   setVal('ev-telefono',  v.telefono||'');
   setVal('ev-direccion', v.direccion||'');
   setVal('ev-ciudad',    v.ciudad||'');
@@ -1709,7 +1774,12 @@ function guardarEdicionVenta() {
     fecha:     fecha,
     nombre:    nombre,
     telefono:  val('ev-telefono'),
+    cedula:    val('ev-cedula').trim(),
     direccion: val('ev-direccion'),
+    serChasis:  val('ev-ser-chasis').trim().toUpperCase(),
+    serMotor:   val('ev-ser-motor').trim().toUpperCase(),
+    serBateria: val('ev-ser-bateria').trim().toUpperCase(),
+    color:      val('ev-color').trim(),
     ciudad:    val('ev-ciudad'),
     correo:    val('ev-correo'),
     canal:     val('ev-canal'),
@@ -2379,6 +2449,114 @@ setInterval(function(){
     var elT=el('total-efectivo-global');if(elT)elT.textContent='$'+Number(tot).toLocaleString('es-CO');
   });
 },30000);
+
+// ================================================================
+// TARJETA DE PROPIEDAD — impresión tamaño carnet (85.6 x 54 mm)
+// ================================================================
+function _esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function _tarjetaHTML(v) {
+  var guion = '—';
+  var f = function(x){ var s = (x==null?'':String(x)).trim(); return s ? _esc(s) : guion; };
+  var fechaLarga = (function(){
+    var p = (v.fecha||'').split('-');
+    if (p.length !== 3) return f(v.fecha);
+    var nm = ['','enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+    return p[2] + ' de ' + nm[parseInt(p[1],10)] + ' de ' + p[0];
+  })();
+
+  // FRENTE — titular y vehículo
+  var frente =
+    '<div class="tp-card">' +
+      '<div class="tp-cara">Frente</div>' +
+      '<div class="tp-head">' +
+        '<div class="tp-logo">⚡</div>' +
+        '<div><div class="tp-emp">Bicicletas Eléctricas</div>' +
+        '<div class="tp-tit">Tarjeta de Propiedad</div></div>' +
+      '</div>' +
+      '<div class="tp-row"><div class="tp-f">' +
+        '<div class="tp-lbl">Propietario</div><div class="tp-val big">'+f(v.nombre)+'</div>' +
+      '</div></div>' +
+      '<div class="tp-row">' +
+        '<div class="tp-f"><div class="tp-lbl">Cédula</div><div class="tp-val mono">'+f(v.cedula)+'</div></div>' +
+        '<div class="tp-f"><div class="tp-lbl">Teléfono</div><div class="tp-val">'+f(v.telefono)+'</div></div>' +
+      '</div>' +
+      '<div class="tp-row"><div class="tp-f">' +
+        '<div class="tp-lbl">Vehículo</div><div class="tp-val big">'+f(v.producto)+'</div>' +
+      '</div></div>' +
+      '<div class="tp-row">' +
+        '<div class="tp-f"><div class="tp-lbl">Color</div><div class="tp-val">'+f(v.color)+'</div></div>' +
+        '<div class="tp-f"><div class="tp-lbl">Código</div><div class="tp-val mono">'+f(v.sku)+'</div></div>' +
+        '<div class="tp-f"><div class="tp-lbl">Cant.</div><div class="tp-val">'+f(v.cantidad)+'</div></div>' +
+      '</div>' +
+      '<div class="tp-pie">Fecha de compra: '+fechaLarga+' &nbsp;·&nbsp; Factura: '+f(v.factura)+'</div>' +
+    '</div>';
+
+  // REVERSO — seriales y validación
+  var reverso =
+    '<div class="tp-card">' +
+      '<div class="tp-cara">Reverso</div>' +
+      '<div class="tp-head"><div><div class="tp-emp">Identificación del Vehículo</div>' +
+      '<div class="tp-tit">Seriales registrados</div></div></div>' +
+      '<div class="tp-row"><div class="tp-f">' +
+        '<div class="tp-lbl">Serial de chasis</div><div class="tp-val mono">'+f(v.serChasis)+'</div>' +
+      '</div></div>' +
+      '<div class="tp-row"><div class="tp-f">' +
+        '<div class="tp-lbl">Serial de motor</div><div class="tp-val mono">'+f(v.serMotor)+'</div>' +
+      '</div></div>' +
+      '<div class="tp-row"><div class="tp-f">' +
+        '<div class="tp-lbl">Serial de batería</div><div class="tp-val mono">'+f(v.serBateria)+'</div>' +
+      '</div></div>' +
+      '<div class="tp-firma">Firma y sello del establecimiento</div>' +
+      '<div class="tp-pie">Este documento acredita la propiedad del vehículo descrito al frente.</div>' +
+    '</div>';
+
+  return frente + reverso;
+}
+
+// Imprime la tarjeta de UNA venta.
+function imprimirTarjeta(id) {
+  var v = null;
+  DB.get(KEYS.ventas).forEach(function(x){ if (String(x.id) === String(id)) v = x; });
+  if (!v) { alert('No se encontró la venta.'); return; }
+
+  var faltan = [];
+  if (!v.cedula)     faltan.push('cédula');
+  if (!v.serChasis)  faltan.push('serial de chasis');
+  if (!v.serMotor)   faltan.push('serial de motor');
+  if (!v.serBateria) faltan.push('serial de batería');
+  if (faltan.length) {
+    if (!confirm('Esta venta no tiene: ' + faltan.join(', ') + '.\n\n' +
+                 'Esos espacios saldrán con una raya (—).\n\n' +
+                 '¿Imprimir así de todos modos?\n' +
+                 '(Cancele para completarlos con el botón ✏️ Editar)')) return;
+  }
+
+  el('print-area').innerHTML = '<div class="tp-wrap">' + _tarjetaHTML(v) + '</div>';
+  window.print();
+}
+
+// Imprime las tarjetas de TODAS las ventas del filtro actual.
+function imprimirTarjetasFiltro() {
+  var ids = [].map.call(document.querySelectorAll('#ventas-body tr[data-vid]'), function(tr){
+    return tr.getAttribute('data-vid');
+  });
+  if (!ids.length) { alert('No hay ventas en la búsqueda actual.'); return; }
+  if (!confirm('Se imprimirán ' + ids.length + ' tarjeta(s), cada una con frente y reverso.\n\n¿Continuar?')) return;
+
+  var ventas = DB.get(KEYS.ventas), html = '';
+  ids.forEach(function(id){
+    ventas.forEach(function(v){ if (String(v.id) === String(id)) html += _tarjetaHTML(v); });
+  });
+  el('print-area').innerHTML = '<div class="tp-wrap">' + html + '</div>';
+  window.print();
+}
 </script>
+
+<!-- Contenedor de impresión: solo esto se imprime -->
+<div id="print-area"></div>
 </body>
 </html>
