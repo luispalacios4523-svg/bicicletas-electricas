@@ -143,7 +143,9 @@
   .tp-val.fluido { white-space: normal; line-height: 1.08; max-height: 7.6mm; overflow: hidden; }
   .tp-val.mono { font-family: "Courier New", monospace; letter-spacing: .3px; }
   .tp-pie  { position: absolute; left: 4mm; right: 4mm; bottom: 2.5mm; font-size: 1.9mm; color: #777; border-top: 0.3mm solid #ddd; padding-top: 1.2mm; }
-  .tp-firma { margin-top: 4mm; border-top: 0.3mm solid #333; width: 42mm; font-size: 1.9mm; color: #555; padding-top: 0.8mm; }
+  .tp-firma { margin-top: 1.6mm; border-top: 0.3mm solid #333; width: 42mm; font-size: 1.9mm; color: #555; padding-top: 0.8mm; }
+  .tp-emisor  { margin-top: 0.8mm; font-weight: 700; color: #1a7f4b; font-size: 1.9mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tp-emisor2 { margin-top: 0.2mm; color: #555; font-size: 1.8mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tp-cara { position: absolute; top: 2mm; right: 3mm; font-size: 1.8mm; color: #bbb; text-transform: uppercase; letter-spacing: .5px; }
 
   @media print {
@@ -474,6 +476,18 @@
       <div class="form-group">
         <label>Nombre del almacén</label>
         <input type="text" id="cfg-empresa" placeholder="VIGOR ELECTRIC">
+      </div>
+      <div class="form-group">
+        <label>NIT</label>
+        <input type="text" id="cfg-nit" placeholder="900.123.456-7">
+      </div>
+      <div class="form-group">
+        <label>Dirección</label>
+        <input type="text" id="cfg-direccion" placeholder="Calle 24 # 18-45, Yopal">
+      </div>
+      <div class="form-group">
+        <label>Teléfono</label>
+        <input type="text" id="cfg-telefono" placeholder="320 000 0000">
       </div>
       <div class="form-group">
         <label>Logo (se guarda solo al subirlo)</label>
@@ -2502,8 +2516,14 @@ function _esc(s) {
 // --- Configuracion de identidad (nombre + logo) ---
 // El logo se guarda como data URL en la base, asi viaja con los backups
 // y esta disponible en cualquier equipo donde abran la app.
+var CFG_CAMPOS = { 'cfg-empresa':'bec_empresa', 'cfg-nit':'bec_nit',
+                   'cfg-direccion':'bec_direccion', 'cfg-telefono':'bec_telefono' };
+
 function renderIdentidad() {
-  setVal('cfg-empresa', (typeof _cache['bec_empresa']==='string') ? _cache['bec_empresa'] : '');
+  Object.keys(CFG_CAMPOS).forEach(function(id){
+    var v = _cache[CFG_CAMPOS[id]];
+    setVal(id, (typeof v === 'string') ? v : '');
+  });
   el('cfg-empresa').placeholder = 'VIGOR ELECTRIC';
   var prev = el('cfg-logo-prev');
   var l = _cache['bec_logo'];
@@ -2553,8 +2573,12 @@ function quitarLogo() {
 }
 
 function guardarIdentidad(msgOk) {
-  var payload = { bec_empresa: val('cfg-empresa').trim(), bec_logo: _cache['bec_logo'] || '' };
-  _cache['bec_empresa'] = payload.bec_empresa;
+  var payload = { bec_logo: _cache['bec_logo'] || '' };
+  Object.keys(CFG_CAMPOS).forEach(function(id){
+    var k = CFG_CAMPOS[id];
+    payload[k] = val(id).trim();
+    _cache[k] = payload[k];
+  });
   return apiPost('/api/save', payload)
     .then(function(){ return recargarCache(); })
     .then(function(){
@@ -2576,6 +2600,26 @@ function _nombreEmpresa() {
   var n = _cache['bec_empresa'];
   return (typeof n === 'string' && n.trim()) ? n.trim() : 'VIGOR ELECTRIC';
 }
+// Datos del emisor para el reverso, en dos renglones ordenados:
+//   VIGOR ELECTRIC · NIT 900.000.000-0
+//   Carrera 23 # 10-54, Yopal · Tel. 321 000 0000
+// Solo se imprime lo que este configurado.
+function _datosAlmacen() {
+  var lee = function(k){ var v = _cache[k]; return (typeof v === 'string') ? v.trim() : ''; };
+  var nit = lee('bec_nit'), dir = lee('bec_direccion'), tel = lee('bec_telefono');
+
+  var l1 = [_esc(_nombreEmpresa())];
+  if (nit) l1.push('NIT ' + _esc(nit));
+
+  var l2 = [];
+  if (dir) l2.push(_esc(dir));
+  if (tel) l2.push('Tel. ' + _esc(tel));
+
+  var h = '<div class="tp-emisor">' + l1.join(' &nbsp;·&nbsp; ') + '</div>';
+  if (l2.length) h += '<div class="tp-emisor2">' + l2.join(' &nbsp;·&nbsp; ') + '</div>';
+  return h;
+}
+
 function _logoHTML() {
   var l = _cache['bec_logo'];
   if (typeof l === 'string' && l.indexOf('data:image') === 0)
@@ -2644,7 +2688,10 @@ function _tarjetaHTML(v) {
         '<div class="tp-lbl">Serial de batería</div><div class="tp-val mono">'+f(v.serBateria)+'</div>' +
       '</div></div>' +
       '<div class="tp-firma">Firma y sello — '+_esc(_nombreEmpresa())+'</div>' +
-      '<div class="tp-pie">Este documento acredita la propiedad del vehículo descrito al frente.</div>' +
+      '<div class="tp-pie">' +
+        'Este documento acredita la propiedad del vehículo descrito al frente.' +
+        _datosAlmacen() +
+      '</div>' +
     '</div>';
 
   return frente + reverso;
