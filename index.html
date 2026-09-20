@@ -131,7 +131,7 @@
   }
   .tp-head { display: flex; align-items: flex-start; gap: 2mm; border-bottom: 0.6mm solid #1a7f4b; padding-bottom: 1.2mm; margin-bottom: 1.8mm; }
   .tp-logo { font-size: 6mm; line-height: 1; }
-  .tp-logo-img { height: 12mm; width: auto; max-width: 18mm; object-fit: contain; display: block; flex: none; }
+  .tp-logo-img { height: 18mm; width: auto; max-width: 22mm; object-fit: contain; display: block; flex: none; }
   .tp-emp  { font-size: 3.1mm; font-weight: 800; letter-spacing: .2px; color: #1a7f4b; text-transform: uppercase; }
   .tp-tit  { font-size: 2.2mm; font-weight: 700; color: #555; letter-spacing: .6px; text-transform: uppercase; }
   .tp-row  { display: flex; gap: 3mm; margin-bottom: 1.1mm; }
@@ -2740,6 +2740,13 @@ function _tarjetaHTML(v) {
     var t = s.length > 44 ? (base-1.0) : s.length > 34 ? (base-0.6) : base;
     return '<div class="tp-val big fluido" style="font-size:'+t.toFixed(1)+'mm">'+_esc(s)+'</div>';
   };
+  // Campos cortos (marca, color): encogen la letra en vez de recortarse.
+  var corto = function(txt) {
+    var s = (txt==null?'':String(txt)).trim();
+    if (!s) return '<div class="tp-val">'+guion+'</div>';
+    var t = s.length > 16 ? 2.2 : s.length > 12 ? 2.5 : s.length > 9 ? 2.8 : 3.1;
+    return '<div class="tp-val" style="font-size:'+t+'mm">'+_esc(s)+'</div>';
+  };
   var fechaLarga = (function(){
     var p = (v.fecha||'').split('-');
     if (p.length !== 3) return f(v.fecha);
@@ -2764,16 +2771,17 @@ function _tarjetaHTML(v) {
         '<div class="tp-f"><div class="tp-lbl">Cédula</div><div class="tp-val mono">'+f(v.cedula)+'</div></div>' +
         '<div class="tp-f"><div class="tp-lbl">Teléfono</div><div class="tp-val">'+f(v.telefono)+'</div></div>' +
       '</div>' +
-      '<div class="tp-row"><div class="tp-f">' +
-        '<div class="tp-lbl">Vehículo</div>'+fluido(v.producto, 3.4) +
-      '</div></div>' +
+      // Vehiculo, marca y color en un solo renglon: libera alto para el logo.
       '<div class="tp-row">' +
-        '<div class="tp-f"><div class="tp-lbl">Marca</div><div class="tp-val">'+f(v.marca)+'</div></div>' +
-        '<div class="tp-f"><div class="tp-lbl">Color</div><div class="tp-val">'+f(v.color)+'</div></div>' +
-        '<div class="tp-f"><div class="tp-lbl">Código</div><div class="tp-val mono">'+f(v.sku)+'</div></div>' +
+        '<div class="tp-f" style="flex:2">' +
+          '<div class="tp-lbl">Vehículo</div>'+fluido(v.producto, 3.1) +
+        '</div>' +
+        '<div class="tp-f"><div class="tp-lbl">Marca</div>'+corto(v.marca)+'</div>' +
+        '<div class="tp-f"><div class="tp-lbl">Color</div>'+corto(v.color)+'</div>' +
       '</div>' +
       '<div class="tp-pie">Fecha de compra: '+fechaLarga+' &nbsp;·&nbsp; Factura: '+f(v.factura) +
-        ((v.cantidad||1) > 1 ? ' &nbsp;·&nbsp; Cantidad: '+f(v.cantidad) : '') + '</div>' +
+        ' &nbsp;·&nbsp; Cód. '+f(v.sku) +
+        ((v.cantidad||1) > 1 ? ' &nbsp;·&nbsp; Cant. '+f(v.cantidad) : '') + '</div>' +
     '</div>';
 
   // REVERSO — seriales y validación
