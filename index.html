@@ -516,6 +516,7 @@
     <div class="btn-row">
       <button class="btn btn-primary" onclick="guardarIdentidad()">💾 Guardar datos</button>
       <button class="btn" style="background:#6c757d;color:#fff" onclick="limpiarFondoGuardado()">🧼 Quitar fondo al logo guardado</button>
+      <button class="btn" style="background:#0b6ea8;color:#fff" onclick="imprimirPruebaLogo()">🔍 Hoja de prueba del logo</button>
       <button class="btn btn-warning" onclick="quitarLogo()">🗑️ Quitar logo</button>
     </div>
     <div id="cfg-alert"></div>
@@ -2807,6 +2808,36 @@ function _tarjetaHTML(v) {
     '</div>';
 
   return frente + reverso;
+}
+
+// Hoja de diagnostico: el mismo logo a varios tamaños en una sola pagina.
+// Sirve para separar dos causas distintas de la borrosidad:
+//   - si TODOS salen borrosos, incluido el de 50 mm -> es la impresora
+//   - si los grandes salen nitidos y el pequeño no  -> es el tamaño fisico
+function imprimirPruebaLogo() {
+  var l = _cache['bec_logo'];
+  if (typeof l !== 'string' || l.indexOf('data:image') !== 0) {
+    showAlert('cfg-alert','⚠ No hay un logo guardado para probar.','error'); return;
+  }
+  var tams = [10, 16, 25, 40, 50];
+  var h = '<div style="font-family:Arial,sans-serif;padding:6mm">' +
+    '<div style="font-size:4mm;font-weight:800;margin-bottom:1mm">Prueba de impresión del logo</div>' +
+    '<div style="font-size:2.6mm;color:#444;margin-bottom:5mm;max-width:150mm">' +
+      'Imprima esta hoja con <strong>Escala 100%</strong> y calidad <strong>Alta</strong>.<br>' +
+      'Si el de 40 y 50 mm también sale borroso, el problema es la impresora o el papel.<br>' +
+      'Si los grandes salen nítidos y solo el de 16 mm no, es el tamaño físico: el logo tiene ' +
+      'demasiado detalle para ese tamaño y conviene una versión simplificada.' +
+    '</div>';
+  tams.forEach(function(t) {
+    h += '<div style="display:flex;align-items:center;gap:5mm;margin-bottom:4mm">' +
+         '<img src="'+l+'" style="height:'+t+'mm;width:auto;object-fit:contain">' +
+         '<div style="font-size:3mm;font-weight:700">'+t+' mm' +
+         '<div style="font-size:2.4mm;font-weight:400;color:#555">' +
+           (t === 16 ? 'tamaño real de la tarjeta' : '') + '</div></div></div>';
+  });
+  h += '</div>';
+  el('print-area').innerHTML = h;
+  window.print();
 }
 
 // Imprime la tarjeta de UNA venta.
