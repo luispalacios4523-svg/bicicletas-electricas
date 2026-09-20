@@ -125,16 +125,16 @@
   .tp-card {
     width: 85.6mm; height: 54mm; box-sizing: border-box;
     border: 1px dashed #999; border-radius: 3mm;
-    padding: 3.5mm 4mm; overflow: hidden;
+    padding: 2.6mm 4mm; overflow: hidden;
     font-family: Arial, Helvetica, sans-serif; color: #111;
     background: #fff; position: relative;
   }
-  .tp-head { display: flex; align-items: flex-start; gap: 2mm; border-bottom: 0.6mm solid #1a7f4b; padding-bottom: 1.2mm; margin-bottom: 1.8mm; }
+  .tp-head { display: flex; align-items: flex-start; gap: 2mm; border-bottom: 0.6mm solid #1a7f4b; padding-bottom: 0.9mm; margin-bottom: 1.2mm; }
   .tp-logo { font-size: 6mm; line-height: 1; }
-  .tp-logo-img { height: 12mm; width: auto; max-width: 18mm; object-fit: contain; display: block; flex: none; }
+  .tp-logo-img { height: 16mm; width: auto; max-width: 20mm; object-fit: contain; display: block; flex: none; }
   .tp-emp  { font-size: 3.1mm; font-weight: 800; letter-spacing: .2px; color: #1a7f4b; text-transform: uppercase; }
   .tp-tit  { font-size: 2.2mm; font-weight: 700; color: #555; letter-spacing: .6px; text-transform: uppercase; }
-  .tp-row  { display: flex; gap: 3mm; margin-bottom: 1.1mm; }
+  .tp-row  { display: flex; gap: 3mm; margin-bottom: 0.8mm; }
   .tp-f    { flex: 1; min-width: 0; }
   .tp-lbl  { font-size: 1.9mm; color: #777; text-transform: uppercase; letter-spacing: .3px; font-weight: 700; }
   .tp-val  { font-size: 2.9mm; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -142,7 +142,7 @@
   /* Nombres largos: se permiten 2 renglones en vez de cortarse con puntos */
   .tp-val.fluido { white-space: normal; line-height: 1.08; max-height: 7.6mm; overflow: hidden; }
   .tp-val.mono { font-family: "Courier New", monospace; letter-spacing: .3px; }
-  .tp-pie  { position: absolute; left: 4mm; right: 4mm; bottom: 2.5mm; font-size: 1.9mm; color: #777; border-top: 0.3mm solid #ddd; padding-top: 1.2mm; }
+  .tp-pie  { position: absolute; left: 4mm; right: 4mm; bottom: 2mm; font-size: 1.9mm; color: #777; border-top: 0.3mm solid #ddd; padding-top: 1mm; }
   .tp-firma { margin-top: 1.6mm; border-top: 0.3mm solid #333; width: 42mm; font-size: 1.9mm; color: #555; padding-top: 0.8mm; }
   /* Datos del almacen bajo el nombre, en el encabezado del frente */
   .tp-datos { font-size: 1.85mm; color: #444; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -2610,14 +2610,18 @@ function subirLogo(input) {
     var img = new Image();
     img.onerror = function(){ showAlert('cfg-alert','❌ El archivo no es una imagen válida.','error'); };
     img.onload = function() {
-      // Se reduce a 400 px máx: una foto de celular de 5 MB queda en pocos KB
-      // y el logo cabe sin problema en la base y en los backups.
-      var max = 400;
+      // Tope alto: un logo normal se conserva TAL CUAL, sin perder definición.
+      // Antes se reducía todo a 400 px y eso restaba nitidez a la impresión.
+      // Solo se achica una foto enorme de celular, que no aporta detalle útil.
+      var max = 1200;
       var k = Math.min(1, max / Math.max(img.width, img.height));
       var w = Math.max(1, Math.round(img.width * k));
       var h = Math.max(1, Math.round(img.height * k));
       var c = document.createElement('canvas'); c.width = w; c.height = h;
-      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      var cx = c.getContext('2d');
+      cx.imageSmoothingEnabled = true;
+      if ('imageSmoothingQuality' in cx) cx.imageSmoothingQuality = 'high';
+      cx.drawImage(img, 0, 0, w, h);
 
       var quitar = el('cfg-quitar-fondo') && el('cfg-quitar-fondo').checked;
       var antes = c.width + '×' + c.height;
