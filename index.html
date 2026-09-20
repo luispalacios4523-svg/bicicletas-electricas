@@ -131,10 +131,10 @@
   }
   .tp-head { display: flex; align-items: flex-start; gap: 2mm; border-bottom: 0.6mm solid #1a7f4b; padding-bottom: 1.2mm; margin-bottom: 1.8mm; }
   .tp-logo { font-size: 6mm; line-height: 1; }
-  .tp-logo-img { height: 9mm; width: auto; max-width: 20mm; object-fit: contain; display: block; }
+  .tp-logo-img { height: 12mm; width: auto; max-width: 18mm; object-fit: contain; display: block; flex: none; }
   .tp-emp  { font-size: 3.1mm; font-weight: 800; letter-spacing: .2px; color: #1a7f4b; text-transform: uppercase; }
   .tp-tit  { font-size: 2.2mm; font-weight: 700; color: #555; letter-spacing: .6px; text-transform: uppercase; }
-  .tp-row  { display: flex; gap: 3mm; margin-bottom: 1.5mm; }
+  .tp-row  { display: flex; gap: 3mm; margin-bottom: 1.1mm; }
   .tp-f    { flex: 1; min-width: 0; }
   .tp-lbl  { font-size: 1.9mm; color: #777; text-transform: uppercase; letter-spacing: .3px; font-weight: 700; }
   .tp-val  { font-size: 2.9mm; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -496,6 +496,10 @@
           📷 Subir logo
           <input type="file" accept="image/*" style="display:none" onchange="subirLogo(this)">
         </label>
+        <label style="font-size:12px;color:var(--muted);margin-top:6px;display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="cfg-quitar-fondo" checked style="width:auto;margin:0">
+          Quitar el fondo de color
+        </label>
       </div>
       <div class="form-group">
         <label>Logo actual (guardado en el servidor)</label>
@@ -503,7 +507,8 @@
       </div>
     </div>
     <div class="btn-row">
-      <button class="btn btn-primary" onclick="guardarIdentidad()">💾 Guardar nombre</button>
+      <button class="btn btn-primary" onclick="guardarIdentidad()">💾 Guardar datos</button>
+      <button class="btn" style="background:#6c757d;color:#fff" onclick="limpiarFondoGuardado()">🧼 Quitar fondo al logo guardado</button>
       <button class="btn btn-warning" onclick="quitarLogo()">🗑️ Quitar logo</button>
     </div>
     <div id="cfg-alert"></div>
@@ -2533,6 +2538,67 @@ function renderIdentidad() {
     : '<span style="font-size:12px;color:var(--muted)">Sin logo — se usará ⚡</span>';
 }
 
+// Vuelve transparente el fondo de color: se extiende desde los bordes hacia
+// adentro, asi un color igual al fondo pero DENTRO del logo no se borra.
+// Tambien recorta el marco sobrante para que el logo se vea mas grande.
+function _quitarFondo(canvas) {
+  var ctx = canvas.getContext('2d');
+  var w = canvas.width, h = canvas.height;
+  var img;
+  try { img = ctx.getImageData(0, 0, w, h); } catch (e) { return canvas; }
+  var d = img.data;
+
+  var idx = function(x,y){ return (y*w + x) * 4; };
+  var s = idx(0,0);
+  var sr = d[s], sg = d[s+1], sb = d[s+2];
+
+  // Si las esquinas no coinciden, no hay un fondo uniforme que quitar.
+  var esquinas = [idx(w-1,0), idx(0,h-1), idx(w-1,h-1)];
+  for (var e = 0; e < esquinas.length; e++) {
+    var k = esquinas[e];
+    if (Math.abs(d[k]-sr) + Math.abs(d[k+1]-sg) + Math.abs(d[k+2]-sb) > 60) return canvas;
+  }
+
+  var tol = 60;
+  var parecido = function(i){
+    return Math.abs(d[i]-sr) + Math.abs(d[i+1]-sg) + Math.abs(d[i+2]-sb) <= tol;
+  };
+
+  var visto = new Uint8Array(w*h);
+  var pila = [];
+  for (var x = 0; x < w; x++) { pila.push(x, 0); pila.push(x, h-1); }
+  for (var y = 0; y < h; y++) { pila.push(0, y); pila.push(w-1, y); }
+
+  while (pila.length) {
+    var py = pila.pop(), px = pila.pop();
+    if (px < 0 || py < 0 || px >= w || py >= h) continue;
+    var p = py*w + px;
+    if (visto[p]) continue;
+    var i = p*4;
+    if (!parecido(i)) continue;
+    visto[p] = 1;
+    d[i+3] = 0;                       // transparente
+    pila.push(px+1,py, px-1,py, px,py+1, px,py-1);
+  }
+  ctx.putImageData(img, 0, 0);
+
+  // Recortar el area realmente visible
+  var minX=w, minY=h, maxX=-1, maxY=-1;
+  for (var yy=0; yy<h; yy++) for (var xx=0; xx<w; xx++) {
+    if (d[idx(xx,yy)+3] > 12) {
+      if (xx<minX) minX=xx; if (xx>maxX) maxX=xx;
+      if (yy<minY) minY=yy; if (yy>maxY) maxY=yy;
+    }
+  }
+  if (maxX < minX || maxY < minY) return canvas;
+  var cw = maxX-minX+1, ch = maxY-minY+1;
+  if (cw === w && ch === h) return canvas;
+  var out = document.createElement('canvas');
+  out.width = cw; out.height = ch;
+  out.getContext('2d').drawImage(canvas, minX, minY, cw, ch, 0, 0, cw, ch);
+  return out;
+}
+
 function subirLogo(input) {
   var file = input.files[0]; if (!file) return;
   input.value = '';
@@ -2552,6 +2618,12 @@ function subirLogo(input) {
       var h = Math.max(1, Math.round(img.height * k));
       var c = document.createElement('canvas'); c.width = w; c.height = h;
       c.getContext('2d').drawImage(img, 0, 0, w, h);
+
+      var quitar = el('cfg-quitar-fondo') && el('cfg-quitar-fondo').checked;
+      var antes = c.width + '×' + c.height;
+      if (quitar) c = _quitarFondo(c);
+      var recortado = (c.width + '×' + c.height) !== antes;
+
       var data;
       try { data = c.toDataURL('image/png'); }
       catch (err) { showAlert('cfg-alert','❌ No se pudo procesar la imagen.','error'); return; }
@@ -2559,11 +2631,38 @@ function subirLogo(input) {
       _cache['bec_logo'] = data;
       renderIdentidad();
       // Se guarda de inmediato: no hay que pulsar nada más.
-      guardarIdentidad('✅ Logo guardado ('+w+'×'+h+' px, '+Math.round(data.length/1024)+' KB). Ya sale en todas las tarjetas.');
+      guardarIdentidad('✅ Logo guardado ('+c.width+'×'+c.height+' px, '+Math.round(data.length/1024)+' KB)'+
+        (recortado ? ' — se quitó el fondo de color.' : '.')+' Ya sale en todas las tarjetas.');
     };
     img.src = e.target.result;
   };
   r.readAsDataURL(file);
+}
+
+// Limpia el fondo del logo que YA esta guardado, sin volver a subir el archivo.
+function limpiarFondoGuardado() {
+  var l = _cache['bec_logo'];
+  if (typeof l !== 'string' || l.indexOf('data:image') !== 0) {
+    showAlert('cfg-alert','⚠ No hay un logo guardado.','error'); return;
+  }
+  showAlert('cfg-alert','Procesando...');
+  var im = new Image();
+  im.onerror = function(){ showAlert('cfg-alert','❌ No se pudo leer el logo guardado.','error'); };
+  im.onload = function() {
+    var c = document.createElement('canvas');
+    c.width = im.width; c.height = im.height;
+    c.getContext('2d').drawImage(im, 0, 0);
+    var antes = c.width + '×' + c.height;
+    var out = _quitarFondo(c);
+    if (out.width === c.width && out.height === c.height) {
+      showAlert('cfg-alert','El logo no tiene un fondo de color uniforme que quitar (quedó igual).','error');
+      return;
+    }
+    _cache['bec_logo'] = out.toDataURL('image/png');
+    renderIdentidad();
+    guardarIdentidad('✅ Fondo quitado: '+antes+' → '+out.width+'×'+out.height+' px. Ya sale limpio en las tarjetas.');
+  };
+  im.src = l;
 }
 
 function quitarLogo() {
