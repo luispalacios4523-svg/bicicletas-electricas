@@ -226,9 +226,11 @@
       <button class="btn btn-primary btn-sm" onclick="exportarInventario()">⬇ Exportar CSV</button>
       <button class="btn btn-sm" style="background:#e67e22;color:white" onclick="recalcularInventario()">🔄 Recalcular Stock</button>
     </div>
+    <div id="inv-resumen" style="display:none;padding:8px 12px;background:#eaf4ef;border-radius:6px;font-size:13px;margin-bottom:10px"></div>
     <div class="table-wrap"><table>
       <thead><tr><th>SKU</th><th>Producto</th><th>Categoría</th><th>Stock</th><th>P. Compra</th><th>Total Inv.</th><th>Valor FOB</th><th>Estado</th></tr></thead>
       <tbody id="inv-body"></tbody>
+      <tfoot id="inv-foot" style="background:#eaf4ef;font-weight:700;border-top:2px solid var(--primary)"></tfoot>
     </table></div>
   </div>
 </div>
@@ -1173,22 +1175,30 @@ function renderInvStats() {
     '<div class="stat-card danger"><div class="stat-label">Sin Stock</div><div class="stat-value">'+sin+'</div></div>';
 
   // Resumen por categoría
+  // Se agrupa sin distinguir tildes ni mayusculas: "bicicleta electrica" y
+  // "Bicicleta Eléctrica" son la misma categoria y suman en una sola tarjeta.
   var cats = {};
   skus.forEach(function(k) {
-    var d = inv[k], cat = d.categoria||'Sin categoría';
-    if (!cats[cat]) cats[cat] = { unidades: 0, valor: 0, refs: 0 };
-    cats[cat].unidades += d.stock;
-    cats[cat].valor    += d.stock * d.precioCompra;
-    cats[cat].refs++;
+    var d = inv[k], key = _normCat(d.categoria) || CAT_SIN;
+    if (!cats[key]) cats[key] = { unidades: 0, valor: 0, refs: 0, label: '' };
+    cats[key].unidades += d.stock;
+    cats[key].valor    += d.stock * d.precioCompra;
+    cats[key].refs++;
+    cats[key].label = _mejorGrafia(cats[key].label, d.categoria);
   });
-  var catKeys = Object.keys(cats).sort();
+  var catKeys = Object.keys(cats).sort(function(a, b) {
+    if (a === CAT_SIN) return 1;
+    if (b === CAT_SIN) return -1;
+    return _capitalizar(cats[a].label).localeCompare(_capitalizar(cats[b].label), 'es');
+  });
   if (!catKeys.length) { el('inv-categorias-card').style.display='none'; return; }
   el('inv-categorias-card').style.display='';
   var h = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">';
-  catKeys.forEach(function(cat) {
-    var c = cats[cat];
+  catKeys.forEach(function(k) {
+    var c = cats[k];
+    var cat = (k === CAT_SIN) ? 'Sin categoría' : _capitalizar(c.label);
     h += '<div style="background:#f0faf3;border:1px solid #b2d8c3;border-radius:8px;padding:14px">' +
-         '<div style="font-weight:700;color:#1a5c35;margin-bottom:8px;font-size:14px">'+cat+'</div>' +
+         '<div style="font-weight:700;color:#1a5c35;margin-bottom:8px;font-size:14px">'+_esc(cat)+'</div>' +
          '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="color:#666">Referencias</span><strong>'+c.refs+'</strong></div>' +
          '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="color:#666">Unidades</span><strong>'+c.unidades+'</strong></div>' +
          '<div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:#666">Valor inventario</span><strong>'+fmt(c.valor)+'</strong></div>' +
@@ -1199,8 +1209,23 @@ function renderInvStats() {
 }
 
 function renderInventario() {
-  var inv=calcInventarioReal(), q=el('inv-search')?val('inv-search').toLowerCase():'';
-  var keys=Object.keys(inv).filter(function(s){ return !q||s.toLowerCase().indexOf(q)>-1||inv[s].nombre.toLowerCase().indexOf(q)>-1; });
+  var inv=calcInventarioReal(), q=el('inv-search')?val('inv-search').trim():'';
+  // Busca en SKU, nombre y categoria, sin distinguir tildes ni mayusculas.
+  var keys=Object.keys(inv).filter(function(s){ return _coincide(q, [s, inv[s].nombre, inv[s].categoria]); });
+
+  // Totales de lo que se esta viendo
+  var tStock=0, tValor=0;
+  keys.forEach(function(s){ tStock+=inv[s].stock; tValor+=inv[s].stock*inv[s].precioCompra; });
+  el('inv-foot').innerHTML = keys.length ?
+    '<tr><td colspan="3" style="text-align:right">TOTAL ('+keys.length+(keys.length===1?' referencia':' referencias')+')</td>'+
+    '<td>'+tStock+'</td><td></td><td>'+fmt(tValor)+'</td><td colspan="2"></td></tr>' : '';
+  var rs = el('inv-resumen');
+  if (q) {
+    rs.style.display = '';
+    rs.innerHTML = '🔍 <strong>'+keys.length+'</strong> '+(keys.length===1?'referencia encontrada':'referencias encontradas')+' &nbsp;|&nbsp; Unidades: <strong>'+tStock+
+      '</strong> &nbsp;|&nbsp; 💰 Valor inventario: <strong>'+fmt(tValor)+'</strong>';
+  } else { rs.style.display = 'none'; }
+
   if (!keys.length){ el('inv-body').innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--muted)">Sin productos</td></tr>'; return; }
   var h=''; keys.forEach(function(sku){
     var d=inv[sku], estado, cls='';
@@ -1437,6 +1462,27 @@ function categoriaVenta(v) {
   return { key: key || CAT_SIN, raw: (it && it.categoria) || '' };
 }
 
+// Busqueda tolerante: sin tildes ni mayusculas y con las palabras en cualquier
+// orden. "bicicleta electrica" encuentra "Bicicleta Eléctrica" y
+// "bicicleta electrica" por igual. Solo exige que cada palabra aparezca en
+// alguno de los textos, asi que nunca pierde un resultado que antes salia.
+function _coincide(q, textos) {
+  var palabras = _normCat(q).split(' ').filter(Boolean);
+  if (!palabras.length) return true;
+  var pajar = _normCat(textos.join(' '));
+  return palabras.every(function(p){ return pajar.indexOf(p) > -1; });
+}
+
+// Entre varias escrituras de una misma categoria, cual mostrar: la que empieza
+// en mayuscula ("Bicicleta Eléctrica") sobre la que no ("bicicleta electrica").
+function _mejorGrafia(actual, nueva) {
+  nueva = String(nueva == null ? '' : nueva).trim();
+  if (!nueva) return actual;
+  var may = function(s){ return /^[A-ZÁÉÍÓÚÑ]/.test(s); };
+  return (!actual || (may(nueva) && !may(actual))) ? nueva : actual;
+}
+function _capitalizar(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
 // Categorias presentes en las ventas, con un nombre legible para mostrar.
 function catsDeVentas(ventas) {
   var mapa = {};
@@ -1444,15 +1490,11 @@ function catsDeVentas(ventas) {
     var c = categoriaVenta(v);
     if (!mapa[c.key]) mapa[c.key] = { key: c.key, label: '', n: 0 };
     mapa[c.key].n++;
-    // Entre las grafias existentes se prefiere la que empieza en mayuscula.
-    var raw = String(c.raw || '').trim();
-    var cur = mapa[c.key].label;
-    if (raw && (!cur || (/^[A-ZÁÉÍÓÚÑ]/.test(raw) && !/^[A-ZÁÉÍÓÚÑ]/.test(cur)))) mapa[c.key].label = raw;
+    mapa[c.key].label = _mejorGrafia(mapa[c.key].label, c.raw);
   });
   var lista = Object.keys(mapa).map(function(k) {
     var m = mapa[k];
-    m.label = (k === CAT_SIN) ? 'Sin categoría'
-            : (m.label.charAt(0).toUpperCase() + m.label.slice(1));
+    m.label = (k === CAT_SIN) ? 'Sin categoría' : _capitalizar(m.label);
     return m;
   });
   lista.sort(function(a, b) {
@@ -1554,7 +1596,9 @@ function renderVentas() {
     var matchQ = !q || v.nombre.toLowerCase().indexOf(q)>-1 || v.sku.toLowerCase().indexOf(q)>-1 ||
                  (v.telefono||'').indexOf(q)>-1 || (v.factura||'').toLowerCase().indexOf(q)>-1 ||
                  pagosStr.indexOf(q)>-1 || (v.formapago||'').toLowerCase().indexOf(q)>-1 ||
-                 totalStr.indexOf(q)>-1 || valorStr.indexOf(q)>-1 || (v.producto||'').toLowerCase().indexOf(q)>-1;
+                 totalStr.indexOf(q)>-1 || valorStr.indexOf(q)>-1 || (v.producto||'').toLowerCase().indexOf(q)>-1 ||
+                 // Ademas: sin tildes ni mayusculas, varias palabras, y tambien por categoria.
+                 _coincide(q, [v.nombre, v.sku, v.producto, categoriaVenta(v).raw]);
     var matchF = !f     || v.tipo === f;
     var matchC = !canal || (v.canal||'') === canal;
     var matchD = !desde || v.fecha >= desde;
