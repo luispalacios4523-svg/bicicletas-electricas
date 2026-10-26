@@ -1,3 +1,7 @@
 flask==3.0.3
 gunicorn==22.0.0
 pg8000==1.31.2
+# pg8000 1.31.2 pide "scramp>=1.4.5" sin tope, y scramp 1.5.0 elimino
+# make_channel_binding, que pg8000 llama al conectarse: la app se caia al
+# arrancar y Render marcaba "Failed deploy". Se fija la ultima de la serie 1.4.
+scramp==1.4.18
