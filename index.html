@@ -222,7 +222,10 @@
   <div class="card">
     <h2>📦 Inventario Actual</h2>
     <div class="search-bar">
-      <input type="text" id="inv-search" placeholder="Buscar por SKU o nombre..." oninput="renderInventario()">
+      <input type="text" id="inv-search" placeholder="Buscar por SKU, nombre o categoría..." oninput="renderInventario()">
+      <select id="inv-cat-filter" title="Filtrar por categoría" onchange="renderInventario()">
+        <option value="">Todas las categorías</option>
+      </select>
       <button class="btn btn-primary btn-sm" onclick="exportarInventario()">⬇ Exportar CSV</button>
       <button class="btn btn-sm" style="background:#e67e22;color:white" onclick="recalcularInventario()">🔄 Recalcular Stock</button>
     </div>
@@ -1210,8 +1213,32 @@ function renderInvStats() {
 
 function renderInventario() {
   var inv=calcInventarioReal(), q=el('inv-search')?val('inv-search').trim():'';
+
+  // Selector de categoria: las categorias reales del inventario, sin repetir
+  // la misma escrita distinto ("bicicleta electrica" / "Bicicleta Eléctrica").
+  var cf = el('inv-cat-filter'), prevCat = cf.value, grupos = {};
+  Object.keys(inv).forEach(function(s){
+    var k = _normCat(inv[s].categoria) || CAT_SIN;
+    if (!grupos[k]) grupos[k] = { key:k, label:'' };
+    grupos[k].label = _mejorGrafia(grupos[k].label, inv[s].categoria);
+  });
+  var opciones = Object.keys(grupos).map(function(k){
+    return { key:k, label: (k === CAT_SIN) ? 'Sin categoría' : _capitalizar(grupos[k].label) };
+  }).sort(function(a,b){
+    if (a.key === CAT_SIN) return 1;
+    if (b.key === CAT_SIN) return -1;
+    return a.label.localeCompare(b.label, 'es');
+  });
+  cf.innerHTML = '<option value="">Todas las categorías</option>' +
+    opciones.map(function(o){ return '<option value="'+_esc(o.key)+'">'+_esc(o.label)+'</option>'; }).join('');
+  if (prevCat) cf.value = prevCat;
+  var cat = cf.value;
+
   // Busca en SKU, nombre y categoria, sin distinguir tildes ni mayusculas.
-  var keys=Object.keys(inv).filter(function(s){ return _coincide(q, [s, inv[s].nombre, inv[s].categoria]); });
+  var keys=Object.keys(inv).filter(function(s){
+    if (cat && (_normCat(inv[s].categoria) || CAT_SIN) !== cat) return false;
+    return _coincide(q, [s, inv[s].nombre, inv[s].categoria]);
+  });
 
   // Totales de lo que se esta viendo
   var tStock=0, tValor=0;
@@ -1220,9 +1247,11 @@ function renderInventario() {
     '<tr><td colspan="3" style="text-align:right">TOTAL ('+keys.length+(keys.length===1?' referencia':' referencias')+')</td>'+
     '<td>'+tStock+'</td><td></td><td>'+fmt(tValor)+'</td><td colspan="2"></td></tr>' : '';
   var rs = el('inv-resumen');
-  if (q) {
+  if (q || cat) {
     rs.style.display = '';
-    rs.innerHTML = '🔍 <strong>'+keys.length+'</strong> '+(keys.length===1?'referencia encontrada':'referencias encontradas')+' &nbsp;|&nbsp; Unidades: <strong>'+tStock+
+    var nombreCat = cat ? (cf.options[cf.selectedIndex] ? cf.options[cf.selectedIndex].text : '') : '';
+    rs.innerHTML = '🔍 <strong>'+keys.length+'</strong> '+(keys.length===1?'referencia encontrada':'referencias encontradas')+
+      (nombreCat ? ' en <strong>'+_esc(nombreCat)+'</strong>' : '')+' &nbsp;|&nbsp; Unidades: <strong>'+tStock+
       '</strong> &nbsp;|&nbsp; 💰 Valor inventario: <strong>'+fmt(tValor)+'</strong>';
   } else { rs.style.display = 'none'; }
 
