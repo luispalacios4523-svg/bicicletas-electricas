@@ -1,7 +1,13 @@
 from flask import Flask, request, jsonify, send_file
 from datetime import datetime
+import copy
+import hashlib
+import hmac
 import json
 import os
+import re
+import secrets
+import time
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
@@ -244,14 +250,111 @@ def efectivo():
     r = jsonify({'efectivo': val})
     return _cors(r)
 
+# ==================================================================
+# CLAVE DE ADMINISTRADOR
+# La app no tiene usuarios. "Administrador" = quien conoce una clave que se
+# guarda AQUI, con hash, y se verifica en el servidor en cada operacion
+# protegida. Ocultar un boton en la pagina no protege nada por si solo.
+#
+# La clave vive en la clave reservada ADMIN_KEY, que no sale por /api/load ni
+# se puede escribir por /api/save ni /api/item/*. Asi no viaja al navegador ni
+# entra en los backups.
+#
+# Respaldo si se olvida: definir la variable de entorno ADMIN_PIN en Render;
+# se acepta ademas de la guardada.
+# ==================================================================
+ADMIN_KEY = 'bec_admin'
+_PIN_MIN, _PIN_MAX = 4, 32
+_MAX_FALLOS, _BLOQUEO_SEG = 5, 300
+_pin_fallos = {'n': 0, 'hasta': 0.0}
+
+
+def _hash_pin(pin, salt_hex):
+    return hashlib.pbkdf2_hmac(
+        'sha256', pin.encode('utf-8'), bytes.fromhex(salt_hex), 200000).hex()
+
+
+def _pin_configurado():
+    return bool(db_get_one(ADMIN_KEY, None)) or bool(os.environ.get('ADMIN_PIN'))
+
+
+def _pin_coincide(pin):
+    if not isinstance(pin, str) or not pin:
+        return False
+    env = os.environ.get('ADMIN_PIN')
+    if env and hmac.compare_digest(pin.encode('utf-8'), env.encode('utf-8')):
+        return True
+    reg = db_get_one(ADMIN_KEY, None)
+    if isinstance(reg, dict) and reg.get('salt') and reg.get('hash'):
+        try:
+            return hmac.compare_digest(_hash_pin(pin, reg['salt']), reg['hash'])
+        except Exception:
+            return False
+    return False
+
+
+def _pin_ok(pin):
+    """(True, None) si la clave es correcta. Tras varios fallos seguidos se
+    bloquea todo intento por unos minutos: frena adivinar la clave a ciegas."""
+    ahora = time.time()
+    if _pin_fallos['hasta'] > ahora:
+        falta = int((_pin_fallos['hasta'] - ahora) // 60) + 1
+        return False, 'Demasiados intentos fallidos. Espere %d min.' % falta
+    if _pin_coincide(pin):
+        _pin_fallos['n'] = 0
+        return True, None
+    _pin_fallos['n'] += 1
+    if _pin_fallos['n'] >= _MAX_FALLOS:
+        _pin_fallos['n'] = 0
+        _pin_fallos['hasta'] = ahora + _BLOQUEO_SEG
+        return False, 'Clave incorrecta. Se bloquearon los intentos por 5 min.'
+    return False, 'Clave incorrecta.'
+
+
+@app.route('/api/admin/estado', methods=['GET', 'POST'])
+def admin_estado():
+    return _cors(jsonify({'ok': True, 'configurado': _pin_configurado()}))
+
+
+@app.route('/api/admin/verificar', methods=['POST'])
+def admin_verificar():
+    ok, err = _pin_ok((request.json or {}).get('pin'))
+    if not ok:
+        return _cors(jsonify({'ok': False, 'error': err})), 403
+    return _cors(jsonify({'ok': True}))
+
+
+@app.route('/api/admin/configurar', methods=['POST'])
+def admin_configurar():
+    """Crea la clave la primera vez; despues solo se cambia presentando la actual."""
+    d = request.json or {}
+    nueva = d.get('pin')
+    if not isinstance(nueva, str) or not (_PIN_MIN <= len(nueva) <= _PIN_MAX):
+        return _cors(jsonify({'ok': False,
+            'error': 'La clave debe tener entre %d y %d caracteres.' % (_PIN_MIN, _PIN_MAX)})), 400
+    if _pin_configurado():
+        ok, err = _pin_ok(d.get('actual'))
+        if not ok:
+            return _cors(jsonify({'ok': False, 'error': err})), 403
+    salt = secrets.token_hex(16)
+    db_save({ADMIN_KEY: {'salt': salt, 'hash': _hash_pin(nueva, salt),
+                         'cambiada': datetime.now().isoformat(timespec='seconds')}})
+    audit('admin', ADMIN_KEY, None, {'accion': 'clave de administrador definida o cambiada'})
+    return _cors(jsonify({'ok': True}))
+
+
 @app.route('/api/load')
 def load():
-    return jsonify(db_load_all())
+    datos = db_load_all()
+    datos.pop(ADMIN_KEY, None)      # el hash de la clave nunca llega al navegador
+    return jsonify(datos)
 
 @app.route('/api/save', methods=['POST'])
 def save():
     data = request.json
     if not data: return jsonify({'ok': False}), 400
+    if ADMIN_KEY in data:
+        return jsonify({'ok': False, 'error': 'clave reservada'}), 403
     # RED DE SEGURIDAD: si una lista llega mas corta de lo que ya hay guardado,
     # significa que se estan perdiendo registros (pestana desactualizada, borrado
     # masivo, etc). Guardamos copia completa en la bitacora ANTES de sobreescribir.
@@ -287,7 +390,7 @@ def _num(x):
 def item_add():
     d = request.json or {}
     key, item = d.get('key'), d.get('item')
-    if not key or not isinstance(item, dict):
+    if not key or not isinstance(item, dict) or key == ADMIN_KEY:
         return _cors(jsonify({'ok': False, 'error': 'peticion invalida'})), 400
 
     def fn(cur):
@@ -311,7 +414,8 @@ def item_add():
 def item_update():
     d = request.json or {}
     key, item = d.get('key'), d.get('item')
-    if not key or not isinstance(item, dict) or item.get('id') is None:
+    if (not key or not isinstance(item, dict) or item.get('id') is None
+            or key == ADMIN_KEY):
         return _cors(jsonify({'ok': False, 'error': 'peticion invalida'})), 400
 
     holder = {}
@@ -340,7 +444,7 @@ def item_update():
 def item_delete():
     d = request.json or {}
     key, item_id = d.get('key'), d.get('id')
-    if not key or item_id is None:
+    if not key or item_id is None or key == ADMIN_KEY:
         return _cors(jsonify({'ok': False, 'error': 'peticion invalida'})), 400
 
     holder = {}
@@ -425,6 +529,201 @@ def inv_upsert():
     except Exception as e:
         return _cors(jsonify({'ok': False, 'error': str(e)})), 500
     return _cors(jsonify(res))
+
+
+def _err(msg, code=400, **extra):
+    r = {'ok': False, 'error': msg}
+    r.update(extra)
+    return _cors(jsonify(r)), code
+
+
+def _entero_positivo(x):
+    try:
+        f = float(x)
+    except Exception:
+        return None
+    if f != int(f) or f <= 0:
+        return None
+    return int(f)
+
+
+def _numero(x, defecto=-1):
+    try:
+        return float(x)
+    except Exception:
+        return defecto
+
+
+_FECHA_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
+
+
+@app.route('/api/producto/editar', methods=['POST'])
+def producto_editar():
+    """Edita una ENTRADA de producto. Solo administrador (clave en cada llamada).
+
+    Corrige el inventario de forma coherente:
+      - misma SKU, otra cantidad  -> el stock cambia por la diferencia
+      - otra SKU                  -> se saca del SKU viejo y se suma al nuevo
+      - nombre, categoria, marca, potencia y precio de compra del inventario se
+        toman de la ULTIMA entrada de cada SKU afectado, igual que al registrar.
+    Si el stock de algun SKU quedaria negativo (ya se vendieron esas unidades)
+    no se cambia nada. Si falla a mitad, el inventario vuelve a como estaba."""
+    d = request.json or {}
+    ok, err = _pin_ok(d.get('pin'))
+    if not ok:
+        return _err(err, 403, clave=True)
+
+    item = d.get('item')
+    if not isinstance(item, dict) or item.get('id') is None:
+        return _err('peticion invalida')
+
+    def txt(k):
+        return str(item.get(k) or '').strip()
+
+    sku, nombre, proveedor, fecha = txt('sku').upper(), txt('nombre'), txt('proveedor'), txt('fecha')
+    cant = _entero_positivo(item.get('cantidad'))
+    valor = _numero(item.get('valor'))
+    pventa = _numero(item.get('pventa') or 0)
+
+    if not sku:
+        return _err('El SKU es obligatorio.')
+    if not nombre:
+        return _err('El nombre del producto es obligatorio.')
+    if not proveedor:
+        return _err('El proveedor es obligatorio.')
+    if not _FECHA_RE.match(fecha):
+        return _err('La fecha no es valida.')
+    if cant is None:
+        return _err('La cantidad debe ser un numero entero mayor que 0.')
+    if valor <= 0:
+        return _err('El valor unitario debe ser mayor que 0.')
+    if pventa < 0:
+        return _err('El valor FOB no es valido.')
+
+    prods = db_get_one('bec_prod', [])
+    if not isinstance(prods, list):
+        prods = []
+    idx = next((i for i, x in enumerate(prods)
+                if isinstance(x, dict) and _same_id(x.get('id'), item['id'])), None)
+    if idx is None:
+        return _err('No se encontro esa entrada. Recargue la pagina e intente de nuevo.', 404)
+
+    viejo = copy.deepcopy(prods[idx])
+    nuevo = dict(viejo)     # conserva campos que el formulario no maneja
+    nuevo.update({
+        'fecha': fecha, 'proveedor': proveedor, 'factura': txt('factura'),
+        'sku': sku, 'nombre': nombre, 'marca': txt('marca'),
+        'potencia': txt('potencia'), 'categoria': txt('categoria'),
+        'cantidad': cant, 'valor': _num(valor), 'pventa': _num(pventa),
+        'total': _num(cant * valor),
+    })
+    if nuevo == viejo:
+        return _cors(jsonify({'ok': True, 'sin_cambios': True, 'item': viejo}))
+
+    lista_nueva = list(prods)
+    lista_nueva[idx] = nuevo
+    sku_viejo = str(viejo.get('sku') or '')
+    cant_vieja = _num(viejo.get('cantidad') or 0)
+    afectados = {sku} | ({sku_viejo} if sku_viejo else set())
+
+    def ultima_de(s):
+        for x in reversed(lista_nueva):
+            if isinstance(x, dict) and str(x.get('sku') or '') == s:
+                return x
+        return None
+
+    holder = {}
+
+    def fn_inv(cur):
+        if not isinstance(cur, dict):
+            cur = {}
+
+        def stock_de(s):
+            r = cur.get(s)
+            return _num(r.get('stock') or 0) if isinstance(r, dict) else 0
+
+        # 1) Calcular el stock resultante SIN tocar nada.
+        resultado = {}
+        if sku_viejo == sku:
+            resultado[sku] = (_num(stock_de(sku) - cant_vieja + cant)
+                              if sku in cur else cant)
+        else:
+            if sku_viejo and sku_viejo in cur:
+                resultado[sku_viejo] = _num(stock_de(sku_viejo) - cant_vieja)
+            resultado[sku] = _num(stock_de(sku) + cant)
+        for s, st in resultado.items():
+            if st < 0:
+                return cur, {'ok': False, 'error':
+                    'El stock de %s quedaria en %s: ya se vendieron unidades de esa entrada. '
+                    'No se hizo ningun cambio.' % (s, st)}
+
+        # 2) Aplicar.
+        holder['antes'] = {s: copy.deepcopy(cur.get(s)) for s in afectados}
+        for s, st in resultado.items():
+            reg = cur.get(s)
+            if not isinstance(reg, dict):
+                reg = cur[s] = {'nombre': '', 'categoria': '', 'stock': 0,
+                                'precioCompra': 0, 'precioVenta': 0}
+            reg['stock'] = st
+        for s in afectados:
+            ult, reg = ultima_de(s), cur.get(s)
+            if ult is None or not isinstance(reg, dict):
+                continue
+            for campo, v in (('nombre', ult.get('nombre')), ('categoria', ult.get('categoria')),
+                             ('marca', ult.get('marca')), ('potencia', ult.get('potencia')),
+                             ('precioCompra', ult.get('valor'))):
+                if v not in (None, ''):
+                    reg[campo] = v
+            if ult.get('pventa'):
+                reg['precioVenta'] = ult['pventa']
+        return cur, {'ok': True, 'stock': {s: cur[s]['stock'] for s in resultado}}
+
+    def restaurar_inv():
+        antes = holder.get('antes')
+        if not antes:
+            return
+
+        def fn(cur):
+            if not isinstance(cur, dict):
+                cur = {}
+            for s, reg in antes.items():
+                if reg is None:
+                    cur.pop(s, None)
+                else:
+                    cur[s] = reg
+            return cur, {'ok': True}
+        try:
+            tx_mutate('bec_inv', fn, default={})
+        except Exception:
+            pass
+
+    try:
+        res_inv = tx_mutate('bec_inv', fn_inv, default={})
+    except Exception as e:
+        return _err(str(e), 500)
+    if not res_inv.get('ok'):
+        return _err(res_inv.get('error') or 'No se pudo actualizar el inventario.', 409)
+
+    def fn_prod(cur):
+        if not isinstance(cur, list):
+            cur = []
+        for i, x in enumerate(cur):
+            if isinstance(x, dict) and _same_id(x.get('id'), item['id']):
+                cur[i] = nuevo
+                return cur, {'ok': True}
+        return cur, {'ok': False, 'error': 'La entrada ya no existe.'}
+
+    try:
+        res = tx_mutate('bec_prod', fn_prod)
+    except Exception as e:
+        res = {'ok': False, 'error': str(e)}
+    if not res.get('ok'):
+        restaurar_inv()
+        return _err(res.get('error') or 'No se pudo guardar la entrada.', 500)
+
+    audit('update', 'bec_prod', nuevo.get('id'),
+          {'before': viejo, 'after': nuevo, 'por': 'administrador'})
+    return _cors(jsonify({'ok': True, 'item': nuevo, 'stock': res_inv.get('stock')}))
 
 
 @app.route('/api/audit')

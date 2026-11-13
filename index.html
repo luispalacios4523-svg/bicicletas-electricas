@@ -270,7 +270,14 @@
   </div>
   <div class="card">
     <h2>📋 Historial de Entradas</h2>
-    <div class="search-bar"><input type="text" id="hist-search" placeholder="Buscar..." oninput="renderHistorial()"></div>
+    <div class="search-bar">
+      <input type="text" id="hist-search" placeholder="Buscar..." oninput="renderHistorial()">
+      <button class="btn btn-sm" id="btn-admin" style="background:#6c757d;color:#fff" onclick="toggleAdmin()">🔐 Modo administrador</button>
+      <button class="btn btn-sm" id="btn-admin-clave" style="display:none;background:#6c757d;color:#fff" onclick="abrirCambioClave()">🔑 Cambiar clave</button>
+    </div>
+    <div id="adm-aviso" style="display:none;margin-bottom:10px;padding:8px 12px;background:#fff6dc;border:1px solid #f0d88a;border-radius:6px;font-size:13px;color:#7a5b00">
+      🔓 <strong>Modo administrador activo.</strong> Aparece el botón ✏️ en cada entrada. Se cierra solo tras 10 min sin usarlo o al salir de esta pantalla.
+    </div>
     <div class="table-wrap"><table>
       <thead><tr><th>Fecha</th><th>Proveedor</th><th>Factura</th><th>SKU</th><th>Producto</th><th>Cant.</th><th>V. Unit.</th><th>Total</th><th></th></tr></thead>
       <tbody id="hist-body"></tbody>
@@ -672,6 +679,64 @@
   </div>
 </div>
 
+<!-- MODAL: Clave de administrador -->
+<div class="modal-overlay" id="modal-admin">
+  <div class="modal" style="max-width:380px">
+    <button class="modal-close" onclick="cerrarModalAdmin()">&#x2715;</button>
+    <h3 id="adm-titulo">🔐 Administrador</h3>
+    <p id="adm-ayuda" style="font-size:13px;color:var(--muted);margin-bottom:12px"></p>
+    <div class="form-group" id="adm-g-actual" style="display:none">
+      <label>Clave actual</label>
+      <input type="password" id="adm-actual" autocomplete="off" onkeydown="if(event.key==='Enter')confirmarAdmin()">
+    </div>
+    <div class="form-group" style="margin-top:8px">
+      <label id="adm-lbl-pin">Clave</label>
+      <input type="password" id="adm-pin" autocomplete="off" onkeydown="if(event.key==='Enter')confirmarAdmin()">
+    </div>
+    <div class="form-group" id="adm-g-rep" style="display:none;margin-top:8px">
+      <label>Repetir clave</label>
+      <input type="password" id="adm-pin2" autocomplete="off" onkeydown="if(event.key==='Enter')confirmarAdmin()">
+    </div>
+    <div id="adm-alert" style="margin-top:10px"></div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="adm-btn" onclick="confirmarAdmin()">Entrar</button>
+      <button class="btn btn-warning" onclick="cerrarModalAdmin()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Editar entrada de producto (solo administrador) -->
+<div class="modal-overlay" id="modal-editar-producto">
+  <div class="modal" style="max-width:640px">
+    <button class="modal-close" onclick="cerrarEditorProducto()">&#x2715;</button>
+    <h3>✏️ Editar entrada de producto</h3>
+    <div style="margin-bottom:12px;padding:8px 10px;background:#fff6dc;border:1px solid #f0d88a;border-radius:6px;font-size:12px;color:#7a5b00">
+      🔓 Modo administrador. Si cambia la <strong>cantidad</strong> o el <strong>SKU</strong>, el inventario se corrige solo.
+    </div>
+    <input type="hidden" id="ep-id">
+    <div class="form-grid">
+      <div class="form-group"><label>Fecha *</label><input type="date" id="ep-fecha"></div>
+      <div class="form-group"><label>Proveedor *</label><input type="text" id="ep-proveedor"></div>
+      <div class="form-group"><label>N° Factura</label><input type="text" id="ep-factura"></div>
+      <div class="form-group"><label>SKU *</label><input type="text" id="ep-sku" style="text-transform:uppercase" oninput="epResumen()"></div>
+      <div class="form-group"><label>Nombre del Producto *</label><input type="text" id="ep-nombre"></div>
+      <div class="form-group"><label>Marca</label><input type="text" id="ep-marca"></div>
+      <div class="form-group"><label>Potencia</label><input type="text" id="ep-potencia" placeholder="Ej: 500W, 1000W"></div>
+      <div class="form-group"><label>Categoría</label><select id="ep-categoria"></select></div>
+      <div class="form-group"><label>Cantidad *</label><input type="number" id="ep-cantidad" min="1" oninput="epCalc()"></div>
+      <div class="form-group"><label>Valor Unitario ($) *</label><input type="number" id="ep-valor" min="0" oninput="epCalc()"></div>
+      <div class="form-group"><label>Total ($)</label><input type="number" id="ep-total" readonly class="info-field"></div>
+      <div class="form-group"><label>Valor FOB ($)</label><input type="number" id="ep-pventa" min="0"></div>
+    </div>
+    <div id="ep-efecto" style="margin-top:10px;font-size:12px;color:#7a5b00"></div>
+    <div id="ep-alert" style="margin-top:10px"></div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="ep-btn" onclick="guardarEdicionProducto()">💾 Guardar cambios</button>
+      <button class="btn btn-warning" onclick="cerrarEditorProducto()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: Editar Venta -->
 <div class="modal-overlay" id="modal-editar-venta">
   <div class="modal" style="max-width:700px">
@@ -798,11 +863,16 @@ function apiPost(path, body) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   }).then(function(r) {
-    if (!r.ok) throw new Error('El servidor respondio ' + r.status);
-    return r.json();
-  }).then(function(j) {
-    if (!j.ok) throw new Error(j.error || 'No se pudo guardar');
-    return j;
+    // Se lee el cuerpo aunque el estado no sea 200: el servidor explica el
+    // motivo ("Clave incorrecta", "stock quedaria negativo") y antes se perdia.
+    return r.json().catch(function(){ return null; }).then(function(j) {
+      if (!r.ok || !j || !j.ok) {
+        var e = new Error((j && j.error) || (!r.ok ? 'El servidor respondio ' + r.status : 'No se pudo guardar'));
+        e.datos = j;
+        throw e;
+      }
+      return j;
+    });
   });
 }
 
@@ -877,6 +947,8 @@ function showAlert(id, msg, type) {
 }
 
 function showPage(page, tab) {
+  // El modo administrador no sobrevive a un cambio de pantalla.
+  if (page !== 'productos' && typeof adminActivo === 'function' && adminActivo()) cerrarAdmin();
   document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
   document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
   el('page-'+page).classList.add('active');
@@ -1122,9 +1194,181 @@ function renderHistorial() {
     h+='<tr><td>'+p.fecha+'</td><td>'+p.proveedor+'</td><td>'+(p.factura||'-')+'</td>';
     h+='<td><strong>'+p.sku+'</strong></td><td>'+p.nombre+'</td>';
     h+='<td>'+p.cantidad+'</td><td>'+fmt(p.valor)+'</td><td>'+fmt(p.total)+'</td>';
-    h+='<td><button class="btn btn-danger btn-sm" onclick="eliminarProducto('+p.id+')">✕</button></td></tr>';
+    h+='<td style="white-space:nowrap">';
+    // El boton de editar solo existe en modo administrador (y ademas el
+    // servidor exige la clave en cada edicion).
+    if (adminActivo()) h+='<button class="btn btn-warning btn-sm" onclick="abrirEditorProducto('+p.id+')" title="Editar entrada" style="margin-right:4px">✏️</button>';
+    h+='<button class="btn btn-danger btn-sm" onclick="eliminarProducto('+p.id+')">✕</button></td></tr>';
   });
   el('hist-body').innerHTML = h;
+}
+
+// ================================================================
+// MODO ADMINISTRADOR — editar entradas de productos
+// La clave se guarda con hash en el servidor y se verifica en CADA edicion.
+// Aqui solo se conserva en memoria mientras el modo esta activo: no queda en
+// el navegador y se pierde al recargar la pagina.
+// ================================================================
+var adminPin = null, _adminTimer = null, _admModo = 'entrar';
+var ADMIN_MINUTOS = 10;
+
+function adminActivo() { return adminPin !== null; }
+
+function _adminReloj() {
+  clearTimeout(_adminTimer);
+  if (adminPin !== null) _adminTimer = setTimeout(function(){ cerrarAdmin(true); }, ADMIN_MINUTOS*60*1000);
+}
+
+function actualizarAdminUI() {
+  var on = adminActivo();
+  el('btn-admin').textContent = on ? '🔓 Cerrar modo administrador' : '🔐 Modo administrador';
+  el('btn-admin').style.background = on ? '#b45309' : '#6c757d';
+  el('btn-admin-clave').style.display = on ? '' : 'none';
+  el('adm-aviso').style.display = on ? '' : 'none';
+}
+
+function cerrarAdmin(porInactividad) {
+  adminPin = null; clearTimeout(_adminTimer);
+  cerrarEditorProducto(); cerrarModalAdmin();
+  actualizarAdminUI(); renderHistorial();
+  if (porInactividad) showAlert('prod-alert', '🔒 Modo administrador cerrado por inactividad.', 'error');
+}
+
+function toggleAdmin() {
+  if (adminActivo()) { cerrarAdmin(); return; }
+  el('adm-alert').innerHTML = '';
+  fetch('/api/admin/estado').then(function(r){ return r.json(); })
+    .then(function(j){ _abrirModalAdmin(j.configurado ? 'entrar' : 'crear'); })
+    .catch(function(e){ errorGuardado('prod-alert', e); });
+}
+
+function abrirCambioClave() { el('adm-alert').innerHTML = ''; _abrirModalAdmin('cambiar'); }
+
+function _abrirModalAdmin(modo) {
+  _admModo = modo;
+  ['adm-actual','adm-pin','adm-pin2'].forEach(function(id){ setVal(id,''); });
+  el('adm-g-actual').style.display = (modo === 'cambiar') ? '' : 'none';
+  el('adm-g-rep').style.display    = (modo === 'entrar') ? 'none' : '';
+  el('adm-lbl-pin').textContent    = (modo === 'entrar') ? 'Clave' : 'Clave nueva';
+  el('adm-titulo').textContent = modo === 'crear' ? '🔐 Crear clave de administrador'
+                               : modo === 'cambiar' ? '🔑 Cambiar clave' : '🔐 Modo administrador';
+  el('adm-ayuda').textContent = modo === 'crear'
+      ? 'Aún no hay clave. Cree una de 4 a 32 caracteres: protege la edición de entradas. Guárdela bien; el servidor no puede mostrarla.'
+      : modo === 'cambiar' ? 'Escriba la clave actual y la nueva.'
+      : 'Escriba la clave de administrador para poder editar entradas.';
+  el('adm-btn').textContent = modo === 'entrar' ? 'Entrar' : 'Guardar clave';
+  el('modal-admin').classList.add('open');
+  setTimeout(function(){ el(modo === 'cambiar' ? 'adm-actual' : 'adm-pin').focus(); }, 50);
+}
+
+function cerrarModalAdmin() {
+  el('modal-admin').classList.remove('open');
+  ['adm-actual','adm-pin','adm-pin2'].forEach(function(id){ setVal(id,''); });
+}
+
+function confirmarAdmin() {
+  var pin = val('adm-pin'), pin2 = val('adm-pin2'), actual = val('adm-actual');
+  var err = function(m){ el('adm-alert').innerHTML = '<div class="alert alert-error">'+m+'</div>'; };
+  if (!pin) { err('Escriba la clave.'); return; }
+  var peticion;
+  if (_admModo === 'entrar') {
+    peticion = apiPost('/api/admin/verificar', { pin: pin });
+  } else {
+    if (pin.length < 4 || pin.length > 32) { err('La clave debe tener entre 4 y 32 caracteres.'); return; }
+    if (pin !== pin2) { err('Las dos claves no coinciden.'); return; }
+    if (_admModo === 'cambiar' && !actual) { err('Escriba la clave actual.'); return; }
+    peticion = apiPost('/api/admin/configurar', { pin: pin, actual: actual });
+  }
+  var btn = el('adm-btn'); btn.disabled = true;
+  peticion.then(function(){
+      var eraCambio = (_admModo === 'cambiar');
+      adminPin = pin; _adminReloj();
+      cerrarModalAdmin(); actualizarAdminUI(); renderHistorial();
+      showAlert('prod-alert', eraCambio ? '✅ Clave cambiada.' : '🔓 Modo administrador activo.');
+    })
+    .catch(function(e){ err(e.message); })
+    .then(function(){ btn.disabled = false; });
+}
+
+// ---- Editar una entrada ----
+var _epOriginal = null;
+var _epCategorias = ['Bicicleta Eléctrica','Moto Eléctrica','Cargador','Espejo','Accesorio','Repuesto','Otro'];
+
+function abrirEditorProducto(id) {
+  if (!adminActivo()) return;
+  var p = null; DB.get(KEYS.productos).forEach(function(x){ if (String(x.id) === String(id)) p = x; });
+  if (!p) { showAlert('prod-alert', '⚠ No se encontró esa entrada. Recargue la página.', 'error'); return; }
+  _epOriginal = p;
+  setVal('ep-id', p.id);
+  setVal('ep-fecha', p.fecha||''); setVal('ep-proveedor', p.proveedor||''); setVal('ep-factura', p.factura||'');
+  setVal('ep-sku', p.sku||''); setVal('ep-nombre', p.nombre||'');
+  setVal('ep-marca', p.marca||''); setVal('ep-potencia', p.potencia||'');
+  // Si la entrada trae una categoria escrita distinto, se conserva como opcion.
+  var cats = _epCategorias.slice();
+  if (p.categoria && cats.indexOf(p.categoria) < 0) cats.unshift(p.categoria);
+  el('ep-categoria').innerHTML = cats.map(function(c){ return '<option>'+_esc(c)+'</option>'; }).join('');
+  el('ep-categoria').value = p.categoria || cats[0];
+  setVal('ep-cantidad', p.cantidad); setVal('ep-valor', p.valor); setVal('ep-pventa', p.pventa||0);
+  epCalc();
+  el('ep-alert').innerHTML = '';
+  el('modal-editar-producto').classList.add('open');
+  _adminReloj();
+}
+
+function cerrarEditorProducto() {
+  el('modal-editar-producto').classList.remove('open');
+  _epOriginal = null;
+}
+
+function epCalc() {
+  setVal('ep-total', ((parseFloat(val('ep-cantidad'))||0) * (parseFloat(val('ep-valor'))||0)).toFixed(0));
+  epResumen();
+}
+
+// Avisa, antes de guardar, que efecto tendra el cambio sobre el inventario.
+function epResumen() {
+  var p = _epOriginal, box = el('ep-efecto');
+  if (!p) { box.textContent = ''; return; }
+  var sku = val('ep-sku').trim().toUpperCase(), cant = parseInt(val('ep-cantidad'),10);
+  if (!sku || isNaN(cant)) { box.textContent = ''; return; }
+  var cantOld = parseInt(p.cantidad,10) || 0, skuOld = String(p.sku||'');
+  if (sku === skuOld && cant !== cantOld) {
+    var d = cant - cantOld;
+    box.textContent = '📦 Inventario de ' + sku + ': ' + (d > 0 ? 'sube ' : 'baja ') + Math.abs(d) + ' unidad' + (Math.abs(d) === 1 ? '' : 'es') + '.';
+  } else if (sku !== skuOld) {
+    box.textContent = '📦 Inventario: ' + (skuOld || '(sin SKU)') + ' baja ' + cantOld + ' y ' + sku + ' sube ' + cant + '.';
+  } else { box.textContent = ''; }
+}
+
+function guardarEdicionProducto() {
+  if (!adminActivo()) { showAlert('ep-alert', '⚠ El modo administrador se cerró.', 'error'); return; }
+  var cant = parseInt(val('ep-cantidad'),10), valor = parseFloat(val('ep-valor'));
+  var f = {
+    id: _epOriginal ? _epOriginal.id : val('ep-id'),
+    fecha: val('ep-fecha'), proveedor: val('ep-proveedor').trim(), factura: val('ep-factura').trim(),
+    sku: val('ep-sku').trim().toUpperCase(), nombre: val('ep-nombre').trim(),
+    marca: val('ep-marca').trim(), potencia: val('ep-potencia').trim(), categoria: val('ep-categoria'),
+    cantidad: cant, valor: valor, pventa: parseFloat(val('ep-pventa')) || 0
+  };
+  var falta = !f.fecha||!f.proveedor||!f.sku||!f.nombre||!(cant>0)||!(valor>0);
+  if (falta) { showAlert('ep-alert', '⚠ Complete los campos obligatorios (*): cantidad y valor deben ser mayores que 0.', 'error'); return; }
+
+  var btn = el('ep-btn'); btn.disabled = true; btn.textContent = 'Guardando...';
+  apiPost('/api/producto/editar', { pin: adminPin, item: f })
+    .then(function(r){ return recargarCache().then(function(){ return r; }); })
+    .then(function(r){
+      cerrarEditorProducto();
+      renderHistorial(); renderInventario(); renderInvStats();
+      showAlert('prod-alert', r.sin_cambios ? 'ℹ️ No había cambios que guardar.'
+                : '✅ Entrada actualizada y confirmada por el servidor.');
+      _adminReloj();
+    })
+    .catch(function(e){
+      // Clave rechazada: se cierra el modo administrador en vez de seguir como si nada.
+      if (e.datos && e.datos.clave) { cerrarAdmin(); alert('🔒 ' + e.message); return; }
+      showAlert('ep-alert', '❌ ' + e.message, 'error');
+    })
+    .then(function(){ btn.disabled = false; btn.textContent = '💾 Guardar cambios'; });
 }
 
 function eliminarProducto(id) {
