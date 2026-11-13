@@ -276,7 +276,7 @@
       <button class="btn btn-sm" id="btn-admin-clave" style="display:none;background:#6c757d;color:#fff" onclick="abrirCambioClave()">🔑 Cambiar clave</button>
     </div>
     <div id="adm-aviso" style="display:none;margin-bottom:10px;padding:8px 12px;background:#fff6dc;border:1px solid #f0d88a;border-radius:6px;font-size:13px;color:#7a5b00">
-      🔓 <strong>Modo administrador activo.</strong> Aparece el botón ✏️ en cada entrada. Se cierra solo tras 10 min sin usarlo o al salir de esta pantalla.
+      🔓 <strong>Modo administrador activo.</strong> Aparecen ✏️ editar y ✕ eliminar en cada entrada. Se cierra solo tras 10 min sin usarlo o al salir de esta pantalla.
     </div>
     <div class="table-wrap"><table>
       <thead><tr><th>Fecha</th><th>Proveedor</th><th>Factura</th><th>SKU</th><th>Producto</th><th>Cant.</th><th>V. Unit.</th><th>Total</th><th></th></tr></thead>
@@ -1052,6 +1052,16 @@ function recuperarBitacora(i) {
         if (ev.key === KEYS.ventas && item.sku && item.cantidad) {
           return invAdjust(item.sku, -item.cantidad);
         }
+        // Si era una entrada de producto, volver a sumar sus unidades. Antes
+        // volvia la entrada pero el stock se quedaba corto. upsert por si el
+        // SKU ya no existe en el inventario.
+        if (ev.key === KEYS.productos && item.sku && item.cantidad) {
+          var campos = { nombre: item.nombre, categoria: item.categoria, precioCompra: item.valor };
+          if (item.marca)    campos.marca = item.marca;
+          if (item.potencia) campos.potencia = item.potencia;
+          if (item.pventa)   campos.precioVenta = item.pventa;
+          return apiPost('/api/inv/upsert', { sku: item.sku, delta: item.cantidad, fields: campos });
+        }
       })
       .then(function(){ return recargarCache(); })
       .then(function(){ alert('✅ Registro recuperado.'); cargarBitacora(); refrescarVistas(); })
@@ -1195,10 +1205,13 @@ function renderHistorial() {
     h+='<td><strong>'+p.sku+'</strong></td><td>'+p.nombre+'</td>';
     h+='<td>'+p.cantidad+'</td><td>'+fmt(p.valor)+'</td><td>'+fmt(p.total)+'</td>';
     h+='<td style="white-space:nowrap">';
-    // El boton de editar solo existe en modo administrador (y ademas el
-    // servidor exige la clave en cada edicion).
-    if (adminActivo()) h+='<button class="btn btn-warning btn-sm" onclick="abrirEditorProducto('+p.id+')" title="Editar entrada" style="margin-right:4px">✏️</button>';
-    h+='<button class="btn btn-danger btn-sm" onclick="eliminarProducto('+p.id+')">✕</button></td></tr>';
+    // Editar y eliminar solo existen en modo administrador (y ademas el
+    // servidor exige la clave en cada una de las dos operaciones).
+    if (adminActivo()) {
+      h+='<button class="btn btn-warning btn-sm" onclick="abrirEditorProducto('+p.id+')" title="Editar entrada" style="margin-right:4px">✏️</button>';
+      h+='<button class="btn btn-danger btn-sm" onclick="eliminarProducto('+p.id+')" title="Eliminar entrada">✕</button>';
+    }
+    h+='</td></tr>';
   });
   el('hist-body').innerHTML = h;
 }
@@ -1372,14 +1385,25 @@ function guardarEdicionProducto() {
 }
 
 function eliminarProducto(id) {
-  var prods = DB.get(KEYS.productos), p=null; prods.forEach(function(x){ if(x.id===id) p=x; });
+  if (!adminActivo()) { showAlert('prod-alert', '🔒 Eliminar entradas requiere el modo administrador.', 'error'); return; }
+  var p=null; DB.get(KEYS.productos).forEach(function(x){ if(String(x.id)===String(id)) p=x; });
   if (!p) return;
-  if (!confirm('¿Eliminar esta entrada?\n\nProducto: '+p.nombre+'\nCantidad: '+p.cantidad+'\n\nSe revertirá el stock. Quedará copia en la Bitácora.')) return;
-  itemDelete(KEYS.productos, id)
-    .then(function(){ return p.sku ? invAdjust(p.sku, -p.cantidad) : null; })
+  if (!confirm('¿Eliminar esta entrada?\n\nProducto: '+p.nombre+'\nSKU: '+p.sku+'\nCantidad: '+p.cantidad+'\nFecha: '+p.fecha+
+               '\n\nEl inventario de '+p.sku+' bajará '+p.cantidad+' unidad'+(p.cantidad==1?'':'es')+
+               '. Quedará copia en la Bitácora para recuperarla.')) return;
+  // Una sola operacion en el servidor: borra la entrada y corrige el stock
+  // juntas, o no hace nada. Antes eran dos llamadas y una podia fallar sola.
+  apiPost('/api/producto/eliminar', { pin: adminPin, id: p.id })
     .then(function(){ return recargarCache(); })
-    .then(function(){ renderHistorial(); renderInventario(); renderInvStats(); })
-    .catch(function(e){ errorGuardado('prod-alert', e); });
+    .then(function(){
+      renderHistorial(); renderInventario(); renderInvStats();
+      showAlert('prod-alert', '✅ Entrada eliminada. Puede recuperarla desde la Bitácora.');
+      _adminReloj();
+    })
+    .catch(function(e){
+      if (e.datos && e.datos.clave) { cerrarAdmin(); alert('🔒 ' + e.message); return; }
+      showAlert('prod-alert', '❌ ' + e.message, 'error');
+    });
 }
 
 // ================================================================

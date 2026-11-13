@@ -417,6 +417,8 @@ def item_update():
     if (not key or not isinstance(item, dict) or item.get('id') is None
             or key == ADMIN_KEY):
         return _cors(jsonify({'ok': False, 'error': 'peticion invalida'})), 400
+    if key == 'bec_prod':
+        return _err('Editar entradas de productos requiere la clave de administrador.', 403)
 
     holder = {}
 
@@ -446,6 +448,8 @@ def item_delete():
     key, item_id = d.get('key'), d.get('id')
     if not key or item_id is None or key == ADMIN_KEY:
         return _cors(jsonify({'ok': False, 'error': 'peticion invalida'})), 400
+    if key == 'bec_prod':
+        return _err('Eliminar entradas de productos requiere la clave de administrador.', 403)
 
     holder = {}
 
@@ -557,6 +561,20 @@ def _numero(x, defecto=-1):
 _FECHA_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
 
 
+def _seguir_ultima_entrada(reg, ult):
+    """Deja nombre, categoria, marca, potencia y precios del inventario como los
+    de la ULTIMA entrada de ese SKU, igual que al registrar una entrada nueva."""
+    if ult is None or not isinstance(reg, dict):
+        return
+    for campo, v in (('nombre', ult.get('nombre')), ('categoria', ult.get('categoria')),
+                     ('marca', ult.get('marca')), ('potencia', ult.get('potencia')),
+                     ('precioCompra', ult.get('valor'))):
+        if v not in (None, ''):
+            reg[campo] = v
+    if ult.get('pventa'):
+        reg['precioVenta'] = ult['pventa']
+
+
 @app.route('/api/producto/editar', methods=['POST'])
 def producto_editar():
     """Edita una ENTRADA de producto. Solo administrador (clave en cada llamada).
@@ -666,16 +684,7 @@ def producto_editar():
                                 'precioCompra': 0, 'precioVenta': 0}
             reg['stock'] = st
         for s in afectados:
-            ult, reg = ultima_de(s), cur.get(s)
-            if ult is None or not isinstance(reg, dict):
-                continue
-            for campo, v in (('nombre', ult.get('nombre')), ('categoria', ult.get('categoria')),
-                             ('marca', ult.get('marca')), ('potencia', ult.get('potencia')),
-                             ('precioCompra', ult.get('valor'))):
-                if v not in (None, ''):
-                    reg[campo] = v
-            if ult.get('pventa'):
-                reg['precioVenta'] = ult['pventa']
+            _seguir_ultima_entrada(cur.get(s), ultima_de(s))
         return cur, {'ok': True, 'stock': {s: cur[s]['stock'] for s in resultado}}
 
     def restaurar_inv():
@@ -724,6 +733,92 @@ def producto_editar():
     audit('update', 'bec_prod', nuevo.get('id'),
           {'before': viejo, 'after': nuevo, 'por': 'administrador'})
     return _cors(jsonify({'ok': True, 'item': nuevo, 'stock': res_inv.get('stock')}))
+
+
+@app.route('/api/producto/eliminar', methods=['POST'])
+def producto_eliminar():
+    """Elimina una ENTRADA de producto. Solo administrador (clave en cada llamada).
+
+    Descuenta del inventario las unidades de esa entrada. Si el stock quedaria
+    negativo (ya se vendieron) no cambia nada. Si falla a mitad, el inventario
+    vuelve a como estaba. Queda copia en la bitacora para poder recuperarla."""
+    d = request.json or {}
+    ok, err = _pin_ok(d.get('pin'))
+    if not ok:
+        return _err(err, 403, clave=True)
+    item_id = d.get('id')
+    if item_id is None:
+        return _err('peticion invalida')
+
+    prods = db_get_one('bec_prod', [])
+    if not isinstance(prods, list):
+        prods = []
+    viejo = next((copy.deepcopy(x) for x in prods
+                  if isinstance(x, dict) and _same_id(x.get('id'), item_id)), None)
+    if viejo is None:
+        return _err('No se encontro esa entrada. Recargue la pagina e intente de nuevo.', 404)
+
+    sku = str(viejo.get('sku') or '')
+    cant = _num(viejo.get('cantidad') or 0)
+    restantes = [x for x in prods
+                 if not (isinstance(x, dict) and _same_id(x.get('id'), item_id))]
+    holder = {}
+
+    def fn_inv(cur):
+        if not isinstance(cur, dict):
+            cur = {}
+        reg = cur.get(sku) if sku else None
+        if not isinstance(reg, dict):
+            return cur, {'ok': True, 'stock': None}      # nada que revertir
+        nuevo_stock = _num(_num(reg.get('stock') or 0) - cant)
+        if nuevo_stock < 0:
+            return cur, {'ok': False, 'error':
+                'El stock de %s quedaria en %s: ya se vendieron unidades de esa entrada. '
+                'No se elimino nada.' % (sku, nuevo_stock)}
+        holder['antes'] = copy.deepcopy(reg)
+        reg['stock'] = nuevo_stock
+        ult = next((x for x in reversed(restantes)
+                    if isinstance(x, dict) and str(x.get('sku') or '') == sku), None)
+        _seguir_ultima_entrada(reg, ult)
+        return cur, {'ok': True, 'stock': nuevo_stock}
+
+    def restaurar_inv():
+        if 'antes' not in holder:
+            return
+
+        def fn(cur):
+            if not isinstance(cur, dict):
+                cur = {}
+            cur[sku] = holder['antes']
+            return cur, {'ok': True}
+        try:
+            tx_mutate('bec_inv', fn, default={})
+        except Exception:
+            pass
+
+    try:
+        res_inv = tx_mutate('bec_inv', fn_inv, default={})
+    except Exception as e:
+        return _err(str(e), 500)
+    if not res_inv.get('ok'):
+        return _err(res_inv.get('error') or 'No se pudo actualizar el inventario.', 409)
+
+    def fn_prod(cur):
+        if not isinstance(cur, list):
+            cur = []
+        keep = [x for x in cur if not (isinstance(x, dict) and _same_id(x.get('id'), item_id))]
+        return keep, {'ok': len(keep) < len(cur)}
+
+    try:
+        res = tx_mutate('bec_prod', fn_prod)
+    except Exception as e:
+        res = {'ok': False, 'error': str(e)}
+    if not res.get('ok'):
+        restaurar_inv()
+        return _err(res.get('error') or 'La entrada ya no existe.', 500)
+
+    audit('delete', 'bec_prod', item_id, {'before': viejo, 'por': 'administrador'})
+    return _cors(jsonify({'ok': True, 'stock': res_inv.get('stock')}))
 
 
 @app.route('/api/audit')
