@@ -680,7 +680,7 @@
 </div>
 
 <!-- MODAL: Clave de administrador -->
-<div class="modal-overlay" id="modal-admin">
+<div class="modal-overlay" id="modal-admin" style="z-index:1100">
   <div class="modal" style="max-width:380px">
     <button class="modal-close" onclick="cerrarModalAdmin()">&#x2715;</button>
     <h3 id="adm-titulo">🔐 Administrador</h3>
@@ -772,6 +772,14 @@
       </div>
       <div class="form-group"><label>Valor IVA (info)</label><input type="number" id="ev-iva-val" readonly class="info-field"></div>
       <div class="form-group"><label>Total ($)</label><input type="number" id="ev-total" readonly class="info-field"></div>
+      <div class="form-group" style="grid-column:1/-1">
+        <label>Costo unitario guardado ($) — con él se calcula la utilidad</label>
+        <div class="pago-row">
+          <input type="number" id="ev-costo" readonly class="info-field">
+          <button class="btn btn-sm" id="ev-costo-btn" style="background:#6c757d;color:#fff;white-space:nowrap" onclick="evCorregirCosto()">🔐 Corregir costo</button>
+        </div>
+        <div id="ev-costo-info" style="font-size:11px;color:var(--muted);margin-top:3px"></div>
+      </div>
     </div>
 
     <p class="sec-title">🔧 Identificación del Vehículo</p>
@@ -1247,8 +1255,13 @@ function cerrarAdmin(porInactividad) {
   if (porInactividad) showAlert('prod-alert', '🔒 Modo administrador cerrado por inactividad.', 'error');
 }
 
-function toggleAdmin() {
+// Si se pasa una funcion, se ejecuta justo despues de entrar con la clave
+// (por ejemplo, para continuar una accion que exigia ser administrador).
+var _admDespues = null;
+
+function toggleAdmin(despues) {
   if (adminActivo()) { cerrarAdmin(); return; }
+  _admDespues = (typeof despues === 'function') ? despues : null;
   el('adm-alert').innerHTML = '';
   fetch('/api/admin/estado').then(function(r){ return r.json(); })
     .then(function(j){ _abrirModalAdmin(j.configurado ? 'entrar' : 'crear'); })
@@ -1277,6 +1290,7 @@ function _abrirModalAdmin(modo) {
 function cerrarModalAdmin() {
   el('modal-admin').classList.remove('open');
   ['adm-actual','adm-pin','adm-pin2'].forEach(function(id){ setVal(id,''); });
+  _admDespues = null;     // si se cancela, la accion pendiente no se ejecuta
 }
 
 function confirmarAdmin() {
@@ -1295,9 +1309,11 @@ function confirmarAdmin() {
   var btn = el('adm-btn'); btn.disabled = true;
   peticion.then(function(){
       var eraCambio = (_admModo === 'cambiar');
+      var pendiente = _admDespues; _admDespues = null;
       adminPin = pin; _adminReloj();
       cerrarModalAdmin(); actualizarAdminUI(); renderHistorial();
       showAlert('prod-alert', eraCambio ? '✅ Clave cambiada.' : '🔓 Modo administrador activo.');
+      if (pendiente) pendiente();
     })
     .catch(function(e){ err(e.message); })
     .then(function(){ btn.disabled = false; });
@@ -1353,6 +1369,33 @@ function epResumen() {
   } else { box.textContent = ''; }
 }
 
+// Cada venta guarda el costo del momento. Si se corrige el valor de una
+// entrada (por ejemplo un cero de mas), las ventas hechas con el valor
+// equivocado siguen con ese costo y su utilidad sale mal. El servidor devuelve
+// las que usaron exactamente el valor anterior; aqui se ofrece corregirlas.
+function proponerCorreccionCostos(r) {
+  var l = (r && r.ventas_afectadas) || [];
+  if (!l.length) return;
+  var nuevo = r.item.valor, anterior = l[0].costoUnit;
+  var lineas = l.slice(0, 8).map(function(v){ return '• ' + v.nombre + ' (' + v.fecha + ')'; }).join('\n') +
+               (l.length > 8 ? '\n• y ' + (l.length - 8) + ' más' : '');
+  if (!confirm('El valor de compra cambió de ' + fmt(anterior) + ' a ' + fmt(nuevo) + '.\n\n' +
+               l.length + ' venta' + (l.length === 1 ? '' : 's') + ' se registró' + (l.length === 1 ? '' : 'on') +
+               ' con el costo anterior, y su utilidad sigue calculada con él:\n\n' + lineas +
+               '\n\n¿Actualizar el costo de ' + (l.length === 1 ? 'esa venta' : 'esas ventas') + ' a ' + fmt(nuevo) + '?')) return;
+  apiPost('/api/ventas/costo', { pin: adminPin, cambios: l.map(function(v){ return { id: v.id, costoUnit: nuevo }; }) })
+    .then(function(){ return recargarCache(); })
+    .then(function(){
+      refrescarVistas();
+      showAlert('prod-alert', '✅ Costo actualizado en ' + l.length + ' venta' + (l.length === 1 ? '' : 's') + '. La utilidad ya se recalculó.');
+      _adminReloj();
+    })
+    .catch(function(e){
+      if (e.datos && e.datos.clave) { cerrarAdmin(); alert('🔒 ' + e.message); return; }
+      showAlert('prod-alert', '❌ ' + e.message, 'error');
+    });
+}
+
 function guardarEdicionProducto() {
   if (!adminActivo()) { showAlert('ep-alert', '⚠ El modo administrador se cerró.', 'error'); return; }
   var cant = parseInt(val('ep-cantidad'),10), valor = parseFloat(val('ep-valor'));
@@ -1375,6 +1418,7 @@ function guardarEdicionProducto() {
       showAlert('prod-alert', r.sin_cambios ? 'ℹ️ No había cambios que guardar.'
                 : '✅ Entrada actualizada y confirmada por el servidor.');
       _adminReloj();
+      proponerCorreccionCostos(r);
     })
     .catch(function(e){
       // Clave rechazada: se cierra el modo administrador en vez de seguir como si nada.
@@ -2195,6 +2239,7 @@ function abrirEditorVenta(id) {
   ev_calcular();
   ev_toggleCredito();
   ev_renderPagos();
+  evMostrarCosto(v);
 
   el('modal-editar-venta').classList.add('open');
 }
@@ -2202,6 +2247,63 @@ function abrirEditorVenta(id) {
 function cerrarEditorVenta() {
   el('modal-editar-venta').classList.remove('open');
   editVentaId = null; evPagos = [];
+  _evCostoEditando = false;
+}
+
+// ---- Costo guardado de la venta ----
+// Cada venta guarda el costo del momento (para que una compra posterior mas
+// cara no cambie su utilidad). Si ese costo quedo mal, se corrige aqui; solo
+// administrador, porque cambia la utilidad que muestran los reportes.
+var _evCostoEditando = false;
+
+function evMostrarCosto(v) {
+  _evCostoEditando = false;
+  var inp = el('ev-costo'), btn = el('ev-costo-btn'), info = el('ev-costo-info');
+  inp.readOnly = true; inp.classList.add('info-field');
+  btn.textContent = '🔐 Corregir costo';
+  var inv = getInventario()[v.sku];
+  var actual = inv && inv.precioCompra ? ' Costo de compra actual en inventario: ' + fmt(inv.precioCompra) + '.' : '';
+  if (v.costoUnit !== undefined && v.costoUnit !== null) {
+    setVal('ev-costo', v.costoUnit);
+    info.textContent = 'Costo registrado al vender.' + actual;
+  } else {
+    setVal('ev-costo', '');
+    info.textContent = 'Esta venta es anterior al registro de costos: su utilidad se estima con el costo actual del inventario.' + actual;
+  }
+}
+
+function evCorregirCosto() {
+  if (!_evCostoEditando) {
+    // Paso 1: pedir la clave si hace falta y habilitar el campo.
+    var habilitar = function() {
+      _evCostoEditando = true;
+      var inp = el('ev-costo');
+      inp.readOnly = false; inp.classList.remove('info-field'); inp.focus(); inp.select();
+      el('ev-costo-btn').textContent = '💾 Aplicar costo';
+      el('ev-costo-info').textContent = 'Escriba el costo unitario correcto y pulse "Aplicar costo". Se guarda de inmediato.';
+    };
+    if (adminActivo()) habilitar(); else toggleAdmin(habilitar);
+    return;
+  }
+  // Paso 2: aplicar.
+  var costo = parseFloat(val('ev-costo'));
+  if (!(costo > 0)) { showAlert('edit-venta-alert', '⚠ El costo debe ser mayor que 0.', 'error'); return; }
+  var id = editVentaId, btn = el('ev-costo-btn');
+  btn.disabled = true;
+  apiPost('/api/ventas/costo', { pin: adminPin, cambios: [{ id: id, costoUnit: costo }] })
+    .then(function(){ return recargarCache(); })
+    .then(function(){
+      var v = null; DB.get(KEYS.ventas).forEach(function(x){ if (x.id === id) v = x; });
+      if (v) evMostrarCosto(v);
+      refrescarVistas();
+      showAlert('edit-venta-alert', '✅ Costo corregido. La utilidad de esta venta ya se recalculó.');
+      _adminReloj();
+    })
+    .catch(function(e){
+      if (e.datos && e.datos.clave) { cerrarAdmin(); alert('🔒 ' + e.message); return; }
+      showAlert('edit-venta-alert', '❌ ' + e.message, 'error');
+    })
+    .then(function(){ btn.disabled = false; });
 }
 
 function ev_buscarSKU() {

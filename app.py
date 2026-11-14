@@ -732,7 +732,73 @@ def producto_editar():
 
     audit('update', 'bec_prod', nuevo.get('id'),
           {'before': viejo, 'after': nuevo, 'por': 'administrador'})
-    return _cors(jsonify({'ok': True, 'item': nuevo, 'stock': res_inv.get('stock')}))
+
+    # Cada venta guarda el costo del momento. Si se corrige el valor de una
+    # entrada (un cero de mas), las ventas hechas con el valor equivocado
+    # conservan ese costo y su utilidad sale mal. Se devuelven las que usaron
+    # exactamente el valor anterior para que la pagina ofrezca corregirlas.
+    afectadas = []
+    valor_anterior = _num(viejo.get('valor') or 0)
+    if valor_anterior and valor_anterior != _num(valor):
+        ventas = db_get_one('bec_ventas', [])
+        for v in (ventas if isinstance(ventas, list) else []):
+            if (isinstance(v, dict) and str(v.get('sku') or '') in afectados
+                    and v.get('costoUnit') is not None
+                    and _num(v.get('costoUnit')) == valor_anterior):
+                afectadas.append({'id': v.get('id'), 'nombre': v.get('nombre'),
+                                  'fecha': v.get('fecha'), 'costoUnit': v.get('costoUnit')})
+    return _cors(jsonify({'ok': True, 'item': nuevo, 'stock': res_inv.get('stock'),
+                          'ventas_afectadas': afectadas}))
+
+
+@app.route('/api/ventas/costo', methods=['POST'])
+def ventas_costo():
+    """Corrige el costo unitario congelado de una o varias ventas. Solo
+    administrador. Recalcula costoTotal = costoUnit x cantidad y deja cada
+    cambio en la bitacora con el antes y el despues."""
+    d = request.json or {}
+    ok, err = _pin_ok(d.get('pin'))
+    if not ok:
+        return _err(err, 403, clave=True)
+    cambios = d.get('cambios')
+    if not isinstance(cambios, list) or not cambios or len(cambios) > 200:
+        return _err('peticion invalida')
+    mapa = {}
+    for c in cambios:
+        if not isinstance(c, dict) or c.get('id') is None:
+            return _err('peticion invalida')
+        cu = _numero(c.get('costoUnit'))
+        if cu <= 0:
+            return _err('El costo unitario debe ser mayor que 0.')
+        mapa[str(c['id'])] = _num(cu)
+
+    hechos = []
+
+    def fn(cur):
+        if not isinstance(cur, list):
+            cur = []
+        for x in cur:
+            if isinstance(x, dict) and str(x.get('id')) in mapa:
+                cu = mapa[str(x.get('id'))]
+                antes = {'nombre': x.get('nombre'), 'fecha': x.get('fecha'), 'total': x.get('total'),
+                         'costoUnit': x.get('costoUnit'), 'costoTotal': x.get('costoTotal')}
+                x['costoUnit'] = cu
+                x['costoTotal'] = _num(cu * _num(x.get('cantidad') or 1))
+                despues = dict(antes, costoUnit=x['costoUnit'], costoTotal=x['costoTotal'])
+                hechos.append((x.get('id'), antes, despues))
+        return cur, {'ok': True}
+
+    try:
+        tx_mutate('bec_ventas', fn)
+    except Exception as e:
+        return _err(str(e), 500)
+    if not hechos:
+        return _err('No se encontraron esas ventas. Recargue la pagina.', 404)
+    for vid, antes, despues in hechos:
+        audit('update', 'bec_ventas', vid,
+              {'before': antes, 'after': despues, 'por': 'administrador',
+               'motivo': 'correccion de costo'})
+    return _cors(jsonify({'ok': True, 'actualizadas': len(hechos)}))
 
 
 @app.route('/api/producto/eliminar', methods=['POST'])
