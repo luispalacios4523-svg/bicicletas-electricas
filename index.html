@@ -154,6 +154,25 @@
   .tp-datos-larga { white-space: normal; line-height: 1.18; max-height: 6.4mm; }
   .tp-cara { position: absolute; top: 2mm; right: 3mm; font-size: 1.8mm; color: #bbb; text-transform: uppercase; letter-spacing: .5px; }
 
+  /* ===== CONTRATO DE VENTA A CREDITO (vista previa y papel) ===== */
+  .ct-doc { font-family: "Times New Roman", Times, serif; font-size: 11pt; line-height: 1.38; color: #000; text-align: justify; }
+  .ct-doc h1 { font-size: 13pt; text-align: center; margin: 0 0 1mm; letter-spacing: .3px; }
+  .ct-doc .ct-num { text-align: center; font-size: 10.5pt; margin-bottom: 5mm; }
+  .ct-doc p { margin: 0 0 3mm; }
+  .ct-doc .ct-cl { margin: 0 0 3mm; break-inside: avoid; }
+  .ct-doc h2 { font-size: 11pt; margin: 6mm 0 2mm; text-align: center; }
+  .ct-doc table { width: 100%; border-collapse: collapse; font-size: 10pt; margin: 2mm 0 4mm; }
+  .ct-doc th, .ct-doc td { border: 1px solid #444; padding: 1.2mm 2mm; text-align: center; }
+  /* La app pone letra blanca a todos los <th>: aqui el fondo es gris claro. */
+  .ct-doc th { background: #e6e6e6; color: #000; font-weight: bold; text-transform: none; letter-spacing: 0; }
+  .ct-doc td { color: #000; background: #fff; }
+  .ct-doc .ct-firmas { display: flex; flex-wrap: wrap; gap: 8mm 10mm; margin-top: 14mm; break-inside: avoid; }
+  .ct-doc .ct-firma { flex: 1 1 70mm; min-width: 60mm; font-size: 10pt; text-align: left; break-inside: avoid; }
+  .ct-doc .ct-linea { border-top: 1px solid #000; margin-top: 16mm; padding-top: 1mm; }
+  .ct-doc .ct-huella { width: 22mm; height: 28mm; border: 1px solid #000; margin-top: 3mm; font-size: 8pt; text-align: center; color: #666; display: flex; align-items: flex-end; justify-content: center; }
+  .ct-doc .ct-borrador { text-align: center; color: #b45309; font-weight: bold; margin-bottom: 4mm; }
+  .ct-doc .ct-pie { margin-top: 8mm; font-size: 9pt; color: #555; text-align: center; }
+
   @media print {
     body > *:not(#print-area) { display: none !important; }
     #print-area { display: block !important;
@@ -161,6 +180,8 @@
     .tp-logo-img { image-rendering: auto; }
     .tp-card { border: 1px dashed #bbb; page-break-inside: avoid; break-inside: avoid; }
     @page { size: auto; margin: 10mm; }
+    .ct-doc { font-size: 11pt; }
+    .ct-doc tr { break-inside: avoid; }
   }
 </style>
 </head>
@@ -516,6 +537,25 @@
         <input type="text" id="cfg-telefono" placeholder="320 000 0000">
       </div>
       <div class="form-group">
+        <label>Ciudad (para contratos)</label>
+        <input type="text" id="cfg-ciudad" placeholder="Yopal">
+      </div>
+      <div class="form-group">
+        <label>Nombre de quien vende (en contratos)</label>
+        <input type="text" id="cfg-vend-nombre" placeholder="Nombre completo del dueño o representante">
+      </div>
+      <div class="form-group">
+        <label>Cédula de quien vende</label>
+        <input type="text" id="cfg-vend-doc" placeholder="Número de cédula">
+      </div>
+      <div class="form-group">
+        <label>Actúa como</label>
+        <select id="cfg-vend-calidad">
+          <option value="propietario">Propietario del establecimiento</option>
+          <option value="representante">Representante legal</option>
+        </select>
+      </div>
+      <div class="form-group">
         <label>Logo (se guarda solo al subirlo)</label>
         <label class="btn" style="background:#6c757d;color:white;cursor:pointer;text-align:center">
           📷 Subir logo
@@ -701,6 +741,55 @@
     <div class="btn-row">
       <button class="btn btn-primary" id="adm-btn" onclick="confirmarAdmin()">Entrar</button>
       <button class="btn btn-warning" onclick="cerrarModalAdmin()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Contrato de venta a credito -->
+<div class="modal-overlay" id="modal-contrato">
+  <div class="modal" style="max-width:760px">
+    <button class="modal-close" onclick="cerrarContrato()">&#x2715;</button>
+    <h3 id="ct-titulo">📄 Contrato de venta a crédito</h3>
+    <div id="ct-estado" style="margin-bottom:10px"></div>
+    <div style="margin-bottom:10px;padding:8px 10px;background:#fff6dc;border:1px solid #f0d88a;border-radius:6px;font-size:12px;color:#7a5b00">
+      ⚖️ Es un <strong>modelo estándar</strong>. Antes de usarlo con clientes, hágalo revisar por un abogado.
+    </div>
+    <div id="ct-resumen" style="margin-bottom:10px;padding:10px;background:#f0f7f3;border-radius:6px;font-size:13px"></div>
+    <div id="ct-faltan"></div>
+
+    <p class="sec-title" style="margin-top:6px">📅 Condiciones del crédito</p>
+    <div class="form-grid">
+      <div class="form-group"><label>Ciudad *</label><input type="text" id="ct-ciudad" oninput="ctCambio()"></div>
+      <div class="form-group"><label>Fecha del contrato *</label><input type="date" id="ct-fecha" onchange="ctCambio('fecha')"></div>
+      <div class="form-group"><label>Número de cuotas *</label><input type="number" id="ct-cuotas" min="1" max="120" oninput="ctCambio('cuotas')"></div>
+      <div class="form-group"><label>Periodicidad *</label>
+        <select id="ct-periodo" onchange="ctCambio('periodo')">
+          <option value="mensual">Mensual</option>
+          <option value="quincenal">Cada 15 días</option>
+          <option value="semanal">Semanal</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Fecha de la primera cuota *</label><input type="date" id="ct-primera" onchange="ctCambio('primera')"></div>
+      <div class="form-group"><label>Valor de cada cuota ($) *</label><input type="number" id="ct-valor" min="1" oninput="ctCambio('valor')"></div>
+      <div class="form-group"><label>Interés de mora mensual (%)</label><input type="number" id="ct-mora" min="0" max="10" step="0.01" placeholder="vacío = tasa máxima legal" oninput="ctCambio()"></div>
+      <div class="form-group"><label>Cuotas en mora para exigir todo el saldo</label><input type="number" id="ct-moracuotas" min="1" max="12" value="2" oninput="ctCambio()"></div>
+    </div>
+    <div id="ct-plan" style="margin:8px 0;font-size:13px"></div>
+
+    <p class="sec-title">🤝 Codeudor <span style="font-weight:400;text-transform:none;color:var(--muted);font-size:12px">— opcional</span></p>
+    <div class="form-grid">
+      <div class="form-group"><label>Nombre</label><input type="text" id="ct-cd-nombre" oninput="ctCambio()"></div>
+      <div class="form-group"><label>Cédula</label><input type="text" id="ct-cd-cedula" oninput="ctCambio()"></div>
+      <div class="form-group"><label>Teléfono</label><input type="text" id="ct-cd-telefono" oninput="ctCambio()"></div>
+      <div class="form-group"><label>Dirección</label><input type="text" id="ct-cd-direccion" oninput="ctCambio()"></div>
+    </div>
+
+    <div id="ct-alert" style="margin-top:10px"></div>
+    <div class="btn-row" id="ct-botones"></div>
+
+    <div id="ct-preview-caja" style="display:none;margin-top:14px">
+      <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">👁️ Vista previa del contrato</div>
+      <div id="ct-preview" style="border:1px solid var(--border);border-radius:6px;background:#fff;max-height:55vh;overflow:auto;padding:14px"></div>
     </div>
   </div>
 </div>
@@ -2030,6 +2119,7 @@ function renderVentas() {
     h+='<td style="font-size:12px">'+pagosStr+'</td>';
     h+='<td style="white-space:nowrap">';
     h+='<button class="btn btn-warning btn-sm" onclick="abrirEditorVenta('+v.id+')" style="margin-bottom:4px">✏️ Editar</button> ';
+    h+=_botonContrato(v);
     h+='<button class="btn btn-primary btn-sm" onclick="imprimirTarjeta('+v.id+')" title="Imprimir tarjeta de propiedad" style="margin-bottom:4px">🪪 Tarjeta</button> ';
     h+='<button class="btn btn-danger btn-sm" onclick="eliminarVenta('+v.id+')">✕</button>';
     h+='</td>';
@@ -3122,7 +3212,9 @@ function _esc(s) {
 // El logo se guarda como data URL en la base, asi viaja con los backups
 // y esta disponible en cualquier equipo donde abran la app.
 var CFG_CAMPOS = { 'cfg-empresa':'bec_empresa', 'cfg-nit':'bec_nit',
-                   'cfg-direccion':'bec_direccion', 'cfg-telefono':'bec_telefono' };
+                   'cfg-direccion':'bec_direccion', 'cfg-telefono':'bec_telefono',
+                   'cfg-ciudad':'bec_ciudad', 'cfg-vend-nombre':'bec_vend_nombre',
+                   'cfg-vend-doc':'bec_vend_doc', 'cfg-vend-calidad':'bec_vend_calidad' };
 
 function renderIdentidad() {
   Object.keys(CFG_CAMPOS).forEach(function(id){
@@ -3467,6 +3559,437 @@ function imprimirTarjetasFiltro() {
     ventas.forEach(function(v){ if (String(v.id) === String(id)) html += _tarjetaHTML(v); });
   });
   el('print-area').innerHTML = '<div class="tp-wrap">' + html + '</div>';
+  window.print();
+}
+
+// ================================================================
+// CONTRATO DE VENTA A CREDITO
+// Se genera desde una venta ya registrada. Las condiciones del credito
+// (cuotas, fechas, mora) se guardan en venta.contrato por /api/venta/contrato,
+// donde el servidor las valida, numera el contrato y bloquea los firmados.
+// ================================================================
+
+// ---- Numeros en letras (pesos) ----
+var _UNI = ['cero','uno','dos','tres','cuatro','cinco','seis','siete','ocho','nueve','diez','once','doce','trece','catorce','quince','dieciséis','diecisiete','dieciocho','diecinueve','veinte','veintiuno','veintidós','veintitrés','veinticuatro','veinticinco','veintiséis','veintisiete','veintiocho','veintinueve'];
+var _DEC = ['','','veinte','treinta','cuarenta','cincuenta','sesenta','setenta','ochenta','noventa'];
+var _CEN = ['','ciento','doscientos','trescientos','cuatrocientos','quinientos','seiscientos','setecientos','ochocientos','novecientos'];
+
+// 1..999. Con apocope, "uno" pasa a "un" ("veintiún mil", "treinta y un pesos").
+function _bajoMil(n, apocope) {
+  if (n === 100) return 'cien';
+  var c = Math.floor(n / 100), r = n % 100, s = [];
+  if (c) s.push(_CEN[c]);
+  if (r) {
+    if (r < 30) {
+      s.push(apocope && r === 1 ? 'un' : apocope && r === 21 ? 'veintiún' : _UNI[r]);
+    } else {
+      var d = Math.floor(r / 10), u = r % 10;
+      s.push(_DEC[d] + (u ? ' y ' + (apocope && u === 1 ? 'un' : _UNI[u]) : ''));
+    }
+  }
+  return s.join(' ');
+}
+
+// n entero >= 1 y < 1.000.000.000.000
+function _letras(n, apocope) {
+  if (n >= 1000000) {
+    var mill = Math.floor(n / 1000000), resto = n % 1000000;
+    var t = (mill === 1) ? 'un millón' : _letras(mill, true) + ' millones';
+    return resto ? t + ' ' + _letras(resto, apocope) : t;
+  }
+  if (n >= 1000) {
+    var m = Math.floor(n / 1000), r = n % 1000;
+    var t2 = (m === 1) ? 'mil' : _bajoMil(m, true) + ' mil';
+    return r ? t2 + ' ' + _bajoMil(r, apocope) : t2;
+  }
+  return _bajoMil(n, apocope);
+}
+
+// "DOS MILLONES SETECIENTOS OCHENTA MIL PESOS M/CTE"
+function pesosEnLetras(n) {
+  n = Math.round(Number(n) || 0);
+  if (n <= 0) return 'CERO PESOS M/CTE';
+  if (n >= 1000000000000) return fmt(n) + ' PESOS M/CTE';
+  var t = n === 1 ? 'un peso' : _letras(n, true) + (n % 1000000 === 0 ? ' de pesos' : ' pesos');
+  return t.toUpperCase() + ' M/CTE';
+}
+function numeroEnLetras(n) { return _letras(Math.round(n), false).toUpperCase(); }
+
+// ---- Fechas ----
+function _iso(d) { return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+var _MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+function _fechaLarga(iso) {
+  var p = String(iso||'').split('-'); if (p.length !== 3) return '____ de ________ de ______';
+  return parseInt(p[2],10) + ' de ' + _MESES[parseInt(p[1],10)-1] + ' de ' + p[0];
+}
+function _fechaCorta(iso) { var p = String(iso||'').split('-'); return p.length === 3 ? p[2]+'/'+p[1]+'/'+p[0] : ''; }
+
+// Suma k periodos. Mensual conserva el dia del mes; si no existe (31 en febrero),
+// usa el ultimo dia de ese mes.
+function _addPeriodo(iso, periodo, k) {
+  var p = String(iso||'').split('-'); if (p.length !== 3) return '';
+  var a = +p[0], m = +p[1] - 1, d = +p[2];
+  if (periodo === 'mensual') {
+    var t = new Date(a, m + k, 1);
+    var ultimo = new Date(t.getFullYear(), t.getMonth() + 1, 0).getDate();
+    t.setDate(Math.min(d, ultimo));
+    return _iso(t);
+  }
+  return _iso(new Date(a, m, d + (periodo === 'semanal' ? 7 : 15) * k));
+}
+
+// ---- Plan de cuotas ----  (misma regla que valida el servidor: la ultima ajusta)
+function planCuotas(c) {
+  var filas = [], resto = c.valorFinanciado;
+  for (var i = 1; i <= c.cuotas; i++) {
+    var valor = (i === c.cuotas) ? resto : c.valorCuota;
+    resto -= valor;
+    filas.push({ n: i, fecha: _addPeriodo(c.primeraCuota, c.periodicidad, i - 1), valor: valor, saldo: Math.max(0, resto) });
+  }
+  return filas;
+}
+
+function _cuotaSugerida(saldo, n) {
+  if (n <= 1) return Math.round(saldo);
+  var exacta = saldo / n, r = Math.ceil(exacta / 100) * 100;
+  return (r * (n - 1) >= saldo) ? Math.ceil(exacta) : r;
+}
+
+// Lo que quedo por financiar al vender: total menos lo recibido en ese momento.
+function _saldoInicial(v) {
+  var pagos = v.pagos || [];
+  var pagado = pagos.length ? pagos.reduce(function(s, p){ return s + (parseFloat(p.valor) || 0); }, 0)
+                            : (parseFloat(v.abono) || 0);
+  return Math.max(0, (parseFloat(v.total) || 0) - pagado);
+}
+function _esCredito(v) { return v.tipo === 'Crédito' || v.tipo === 'Credito'; }
+function _cfgTxt(k) { var x = _cache[k]; return (typeof x === 'string') ? x.trim() : ''; }
+
+// Boton de la tabla de ventas: solo si es credito CON saldo por financiar (hay
+// ventas marcadas Credito pagadas completas con Addi), o si ya tiene contrato.
+function _botonContrato(v) {
+  var c = v.contrato;
+  if (!c && !(_esCredito(v) && _saldoInicial(v) > 1)) return '';
+  var txt = '📄 Contrato', color = '#0b6ea8', tip = 'Crear contrato de venta a crédito';
+  if (c && c.firmado)  { txt += ' ✓'; color = '#1a7f4b'; tip = 'Contrato ' + c.numero + ' firmado el ' + c.firmado; }
+  else if (c)          { txt += ' •'; color = '#b45309'; tip = 'Contrato ' + c.numero + ' pendiente de firma'; }
+  return '<button class="btn btn-sm" onclick="abrirContrato(' + v.id + ')" title="' + _esc(tip) +
+         '" style="background:' + color + ';color:#fff;margin-bottom:4px">' + txt + '</button> ';
+}
+
+// ---- Texto del contrato ----
+var _ORD = ['PRIMERA','SEGUNDA','TERCERA','CUARTA','QUINTA','SEXTA','SÉPTIMA','OCTAVA','NOVENA','DÉCIMA','UNDÉCIMA','DUODÉCIMA'];
+
+function _contratoHTML(v, c) {
+  var e = _esc;
+  var B = function(s) { return '<strong>' + (s ? e(s) : '______________________') + '</strong>'; };
+  var nl = function(n) { return pesosEnLetras(n) + ' (' + fmt(n) + ')'; };
+
+  var emp = _nombreEmpresa(), nit = _cfgTxt('bec_nit'), dirV = _cfgTxt('bec_direccion');
+  var vNom = _cfgTxt('bec_vend_nombre'), vDoc = _cfgTxt('bec_vend_doc');
+  var repr = _cfgTxt('bec_vend_calidad') === 'representante';
+  var ciudad = c.ciudad || _cfgTxt('bec_ciudad');
+  var cd = c.codeudor;
+  var plan = planCuotas(c), ult = plan[plan.length - 1];
+  var iguales = (plan.length === 1) || (ult.valor === c.valorCuota);
+  var adj = c.periodicidad === 'mensual' ? 'mensuales' : c.periodicidad === 'semanal' ? 'semanales (cada siete (7) días)' : 'quincenales (cada quince (15) días)';
+  var nCuotas = c.cuotas + ' (' + numeroEnLetras(c.cuotas) + ')';
+
+  var cant = parseInt(v.cantidad, 10) || 1;
+  var bien = (cant === 1 ? 'una (1) unidad' : cant + ' unidades') + ' de ' + B(v.producto);
+  if (v.marca)     bien += ', marca ' + B(v.marca);
+  if (v.color)     bien += ', color ' + B(v.color);
+  if (v.potencia)  bien += ', potencia ' + B(v.potencia);
+
+  var mets = {};
+  (v.pagos || []).forEach(function(p) { var k = p.metodo || 'Efectivo'; mets[k] = (mets[k] || 0) + (parseFloat(p.valor) || 0); });
+  var metodos = Object.keys(mets).map(function(k) { return e(k) + ' (' + fmt(mets[k]) + ')'; }).join(', ');
+
+  var partes =
+    B(emp) + (nit ? ', identificado con NIT ' + e(nit) : '') + (dirV ? ', con domicilio en ' + e(dirV) : '') + ', ' +
+    (repr ? 'representada legalmente por ' : 'establecimiento de comercio de propiedad de ') + B(vNom) +
+    ', mayor de edad, identificado(a) con cédula de ciudadanía número ' + B(vDoc) +
+    ', quien en adelante se denominará <strong>EL VENDEDOR</strong>; y ' +
+    B(v.nombre) + ', mayor de edad, identificado(a) con cédula de ciudadanía número ' + B(v.cedula) +
+    ', domiciliado(a) en ' + B([v.direccion, v.ciudad].filter(Boolean).join(', ')) +
+    (v.telefono ? ', teléfono ' + e(v.telefono) : '') + (v.correo ? ', correo ' + e(v.correo) : '') +
+    ', quien en adelante se denominará <strong>EL COMPRADOR</strong>' +
+    (cd ? '; y ' + B(cd.nombre) + ', mayor de edad, identificado(a) con cédula de ciudadanía número ' + B(cd.cedula) +
+          (cd.direccion ? ', domiciliado(a) en ' + e(cd.direccion) : '') + (cd.telefono ? ', teléfono ' + e(cd.telefono) : '') +
+          ', quien en adelante se denominará <strong>EL CODEUDOR</strong>' : '');
+
+  // Alineado a la izquierda: justificado, esta linea larga queda con huecos enormes.
+  var seriales = '<div style="text-align:left;margin-top:1mm">Serial de chasis: ' + B(v.serChasis) + '. Serial de motor: ' + B(v.serMotor) + '. Serial de batería: ' + B(v.serBateria) + '.</div>';
+
+  var cuotasTxt = (plan.length === 1)
+      ? 'en una (1) cuota única de ' + nl(ult.valor) + ', con vencimiento el ' + _fechaLarga(plan[0].fecha)
+      : 'en ' + nCuotas + ' cuotas ' + adj + ', así: ' +
+        (iguales ? 'cuotas iguales de ' + nl(c.valorCuota) + ' cada una'
+                 : (plan.length - 1) + ' cuotas de ' + nl(c.valorCuota) + ' cada una y una última cuota de ' + nl(ult.valor)) +
+        ', la primera con vencimiento el ' + _fechaLarga(plan[0].fecha) + ' y la última el ' + _fechaLarga(ult.fecha);
+
+  var cl = [];
+  cl.push(['OBJETO', 'EL VENDEDOR vende a EL COMPRADOR, y éste adquiere a ese título, el siguiente bien: ' + bien + '.' + seriales]);
+  cl.push(['PRECIO', 'El precio total de la venta es la suma de <strong>' + nl(c.precioTotal) + '</strong>' +
+    (v.ivaVal > 0 ? ', valor que incluye el IVA por ' + fmt(v.ivaVal) : '') + '.']);
+  cl.push(['FORMA DE PAGO', 'EL COMPRADOR pagará el precio así: <br>a) <strong>Cuota inicial</strong> de ' + nl(c.cuotaInicial) +
+    ', que EL VENDEDOR declara haber recibido a la fecha de este contrato' + (metodos ? ', mediante ' + metodos : '') + '.' +
+    '<br>b) <strong>Saldo</strong> de ' + nl(c.valorFinanciado) + ', que EL COMPRADOR pagará ' + cuotasTxt +
+    '. El detalle consta en el Plan de Pagos, que hace parte de este contrato. Los pagos se harán en la dirección de EL VENDEDOR ' +
+    'o por los medios que éste indique.']);
+  cl.push(['ENTREGA', 'EL VENDEDOR entrega en este acto el bien descrito, y EL COMPRADOR lo recibe a satisfacción, en buen estado y funcionamiento.']);
+  cl.push(['RESERVA DE DOMINIO', 'EL VENDEDOR se reserva el dominio del bien vendido hasta que EL COMPRADOR haya pagado la totalidad del precio. ' +
+    'Mientras exista saldo pendiente, EL COMPRADOR no podrá venderlo, cederlo, gravarlo ni transferir su tenencia a ningún título. ' +
+    'Pagado el precio total, el dominio queda en cabeza de EL COMPRADOR sin necesidad de otro trámite.']);
+  cl.push(['MORA', 'Si EL COMPRADOR se retrasa en el pago de cualquier cuota, pagará intereses de mora sobre el valor vencido, desde el día siguiente al ' +
+    'del vencimiento y hasta el pago efectivo, ' +
+    (c.moraPct != null ? 'a la tasa del ' + e(String(c.moraPct).replace('.', ',')) + '% mensual, sin exceder en ningún caso la tasa máxima legal permitida'
+                       : 'a la tasa máxima legal permitida vigente') +
+    '. Los pagos se imputarán primero a los intereses de mora, si los hubiere, y luego a las cuotas vencidas más antiguas. ' +
+    'Los gastos de cobranza judicial que se causen serán a cargo de EL COMPRADOR.']);
+  cl.push(['VENCIMIENTO ANTICIPADO', 'Si EL COMPRADOR incurre en mora en el pago de ' + c.moraCuotas + ' (' + numeroEnLetras(c.moraCuotas) +
+    ') o más cuotas, EL VENDEDOR podrá declarar vencido el plazo y exigir el pago inmediato del saldo total pendiente, junto con los ' +
+    'intereses de mora causados.']);
+  cl.push(['GARANTÍA', 'La garantía del bien se rige por la Ley 1480 de 2011 (Estatuto del Consumidor) y por las condiciones del fabricante o proveedor.']);
+  if (cd) cl.push(['CODEUDOR', 'EL CODEUDOR se obliga solidariamente con EL COMPRADOR al pago de todas las sumas que éste adeude en virtud de este ' +
+    'contrato, incluidos los intereses de mora y los gastos de cobranza judicial.']);
+  cl.push(['TRATAMIENTO DE DATOS PERSONALES', 'EL COMPRADOR' + (cd ? ' y EL CODEUDOR autorizan' : ' autoriza') + ' a EL VENDEDOR para tratar sus datos personales ' +
+    '(identificación, contacto y comportamiento de pago) con el fin de ejecutar este contrato, gestionar el cobro y contactarlos, conforme a la ' +
+    'Ley 1581 de 2012 y demás normas aplicables.']);
+  cl.push(['DOMICILIO Y NOTIFICACIONES', 'Las partes fijan como domicilio contractual la ciudad de ' + B(ciudad) +
+    ' y como direcciones para notificaciones las indicadas en este contrato.']);
+
+  var clHTML = cl.map(function(x, i) {
+    return '<div class="ct-cl"><strong>' + _ORD[i] + '. ' + x[0] + '.</strong> ' + x[1] + '</div>';
+  }).join('');
+
+  var filas = plan.map(function(f) {
+    return '<tr><td>' + f.n + '</td><td>' + _fechaCorta(f.fecha) + '</td><td>' + fmt(f.valor) + '</td><td>' + fmt(f.saldo) + '</td></tr>';
+  }).join('');
+
+  var firma = function(rol, nombre, doc, extra) {
+    return '<div class="ct-firma"><div class="ct-linea">' + rol + '</div>' + B(nombre) + '<br>C.C. ' + (doc ? e(doc) : '______________') +
+           (extra ? '<br>' + extra : '') + '<div class="ct-huella">Huella</div></div>';
+  };
+
+  return (c.numero ? '' : '<div class="ct-borrador">BORRADOR — el número se asigna al guardar</div>') +
+    '<h1>CONTRATO DE COMPRAVENTA A CRÉDITO<br>CON RESERVA DE DOMINIO</h1>' +
+    '<div class="ct-num">N° ' + (c.numero ? e(c.numero) : '________') + '</div>' +
+    '<p>En ' + B(ciudad) + ', a ' + e(_fechaLarga(c.fecha)) + ', entre los suscritos: ' + partes +
+    '; hemos convenido celebrar el presente contrato de compraventa a crédito, que se regirá por las siguientes cláusulas:</p>' +
+    clHTML +
+    '<p>Para constancia, se firma en dos (2) ejemplares del mismo tenor, uno para cada parte, en ' + e(ciudad || '__________') + ', el ' + e(_fechaLarga(c.fecha)) + '.</p>' +
+    '<div class="ct-firmas">' +
+      firma('EL VENDEDOR', vNom, vDoc, e(emp) + (nit ? ' — NIT ' + e(nit) : '')) +
+      firma('EL COMPRADOR', v.nombre, v.cedula, '') +
+      (cd ? firma('EL CODEUDOR', cd.nombre, cd.cedula, '') : '') +
+    '</div>' +
+    '<h2>PLAN DE PAGOS — Contrato N° ' + (c.numero ? e(c.numero) : '________') + '</h2>' +
+    '<table><thead><tr><th>Cuota</th><th>Vencimiento</th><th>Valor</th><th>Saldo después de pagarla</th></tr></thead><tbody>' + filas + '</tbody></table>' +
+    '<p style="text-align:center">Saldo financiado: <strong>' + fmt(c.valorFinanciado) + '</strong></p>' +
+    '<div class="ct-pie">' + e(emp) + (c.numero ? ' · Contrato ' + e(c.numero) : '') + '</div>';
+}
+
+// ---- Dialogo ----
+var _ctId = null, _ctSaldo = 0, _ctValorManual = false, _ctPrimeraManual = false, _ctFirmado = false, _ctGuardado = null;
+
+function _ventaPorId(id) { var r = null; DB.get(KEYS.ventas).forEach(function(x){ if (String(x.id) === String(id)) r = x; }); return r; }
+
+// Lo que impide generar el contrato (bloqueos) y lo que solo conviene completar (avisos).
+function _faltantesContrato(v) {
+  var b = [], a = [];
+  if (String(v.cedula || '').replace(/\D/g, '').length < 5) b.push('Cédula del comprador (pulse ✏️ Editar en la venta)');
+  if (!_cfgTxt('bec_vend_nombre')) b.push('Nombre de quien vende (Reportes → Identidad del Almacén)');
+  if (!_cfgTxt('bec_vend_doc'))    b.push('Cédula de quien vende (Reportes → Identidad del Almacén)');
+  if (!String(v.direccion || '').trim()) a.push('dirección del comprador');
+  if (!String(v.telefono || '').trim())  a.push('teléfono del comprador');
+  if (!v.serChasis || !v.serMotor || !v.serBateria) a.push('seriales del vehículo (saldrán en blanco para llenar a mano)');
+  return { bloqueos: b, avisos: a };
+}
+
+function _ctLeer() {
+  var mora = val('ct-mora').trim();
+  var cd = { nombre: val('ct-cd-nombre').trim(), cedula: val('ct-cd-cedula').trim(), telefono: val('ct-cd-telefono').trim(), direccion: val('ct-cd-direccion').trim() };
+  var hayCd = !!(cd.nombre || cd.cedula || cd.telefono || cd.direccion);
+  return {
+    ciudad: val('ct-ciudad').trim(), fecha: val('ct-fecha'), cuotas: parseInt(val('ct-cuotas'), 10),
+    periodicidad: val('ct-periodo'), primeraCuota: val('ct-primera'), valorCuota: parseFloat(val('ct-valor')),
+    moraPct: mora === '' ? null : parseFloat(mora), moraCuotas: parseInt(val('ct-moracuotas'), 10) || 2,
+    codeudor: hayCd ? cd : null
+  };
+}
+
+// Misma validacion que hace el servidor, para avisar antes de enviar.
+function _ctValidar(c, saldo) {
+  if (!c.ciudad) return 'Escriba la ciudad del contrato.';
+  if (!c.fecha) return 'Falta la fecha del contrato.';
+  if (!(c.cuotas >= 1 && c.cuotas <= 120)) return 'El número de cuotas debe estar entre 1 y 120.';
+  if (!c.primeraCuota) return 'Falta la fecha de la primera cuota.';
+  if (c.primeraCuota < c.fecha) return 'La primera cuota no puede ser anterior a la fecha del contrato.';
+  if (c.cuotas > 1) {
+    if (!(c.valorCuota > 0)) return 'Escriba el valor de cada cuota.';
+    if (c.valorCuota * (c.cuotas - 1) >= saldo) return 'Con ' + c.cuotas + ' cuotas de ' + fmt(c.valorCuota) + ' no queda saldo para la última: la cuota es demasiado alta.';
+    if (c.valorCuota * c.cuotas < saldo) return 'Con ' + c.cuotas + ' cuotas de ' + fmt(c.valorCuota) + ' no se alcanza a pagar el saldo: la cuota es demasiado baja.';
+  }
+  if (c.moraPct !== null && !(c.moraPct >= 0 && c.moraPct <= 10)) return 'El interés de mora mensual debe estar entre 0 y 10 %.';
+  if (!(c.moraCuotas >= 1 && c.moraCuotas <= 12)) return 'Las cuotas en mora para exigir el saldo deben ser entre 1 y 12.';
+  if (c.codeudor && (!c.codeudor.nombre || !c.codeudor.cedula)) return 'Del codeudor se necesitan al menos el nombre y la cédula.';
+  return '';
+}
+
+function abrirContrato(id) {
+  var v = _ventaPorId(id); if (!v) return;
+  _ctId = v.id; _ctGuardado = v.contrato || null; _ctFirmado = !!(_ctGuardado && _ctGuardado.firmado);
+  _ctSaldo = _ctGuardado ? _ctGuardado.valorFinanciado : _saldoInicial(v);
+  _ctValorManual = !!_ctGuardado; _ctPrimeraManual = !!_ctGuardado;
+  var c = _ctGuardado, hoy = _iso(new Date());
+
+  setVal('ct-ciudad',  c ? c.ciudad : (_cfgTxt('bec_ciudad') || v.ciudad || ''));
+  setVal('ct-fecha',   c ? c.fecha : hoy);
+  setVal('ct-cuotas',  c ? c.cuotas : '');
+  el('ct-periodo').value = c ? c.periodicidad : 'mensual';
+  setVal('ct-primera', c ? c.primeraCuota : _addPeriodo(hoy, 'mensual', 1));
+  setVal('ct-valor',   c ? c.valorCuota : '');
+  setVal('ct-mora',    c && c.moraPct != null ? c.moraPct : '');
+  setVal('ct-moracuotas', c ? c.moraCuotas : 2);
+  var cd = (c && c.codeudor) || {};
+  setVal('ct-cd-nombre', cd.nombre || ''); setVal('ct-cd-cedula', cd.cedula || '');
+  setVal('ct-cd-telefono', cd.telefono || ''); setVal('ct-cd-direccion', cd.direccion || '');
+
+  ['ct-ciudad','ct-fecha','ct-cuotas','ct-periodo','ct-primera','ct-valor','ct-mora','ct-moracuotas','ct-cd-nombre','ct-cd-cedula','ct-cd-telefono','ct-cd-direccion']
+    .forEach(function(i){ el(i).disabled = _ctFirmado; });
+
+  el('ct-titulo').textContent = '📄 Contrato de venta a crédito' + (c ? ' — ' + c.numero : '');
+  el('ct-estado').innerHTML = _ctFirmado
+      ? '<div class="alert alert-success" style="display:block">✅ <strong>Firmado el ' + _fechaCorta(c.firmado) + '.</strong> Está bloqueado: para modificarlo, un administrador debe quitar primero la firma.</div>'
+      : c ? '<div class="alert" style="display:block;background:#fff6dc;border:1px solid #f0d88a;color:#7a5b00">📝 Contrato guardado, <strong>pendiente de firma</strong>.</div>' : '';
+  el('ct-resumen').innerHTML =
+    '<strong>' + _esc(v.nombre) + '</strong> · C.C. ' + _esc(v.cedula || '—') + '<br>' +
+    _esc(v.producto) + ' · Total <strong>' + fmt(v.total) + '</strong> · Cuota inicial <strong>' + fmt((c ? c.cuotaInicial : v.total - _saldoInicial(v))) +
+    '</strong> · <span style="color:var(--danger)">Saldo a financiar <strong>' + fmt(_ctSaldo) + '</strong></span>';
+
+  var f = _faltantesContrato(v), html = '';
+  if (f.bloqueos.length) html += '<div class="alert alert-error" style="display:block"><strong>⛔ Falta para poder generar el contrato:</strong><br>• ' + f.bloqueos.map(_esc).join('<br>• ') + '</div>';
+  if (f.avisos.length)   html += '<div class="alert" style="display:block;background:#fff6dc;border:1px solid #f0d88a;color:#7a5b00">⚠️ Conviene completar: ' + f.avisos.map(_esc).join(', ') + '.</div>';
+  el('ct-faltan').innerHTML = html;
+
+  el('ct-alert').innerHTML = '';
+  el('ct-preview-caja').style.display = 'none';
+  _ctRender();
+  el('modal-contrato').classList.add('open');
+}
+
+function cerrarContrato() { el('modal-contrato').classList.remove('open'); _ctId = null; }
+
+function ctCambio(cual) {
+  if (cual === 'cuotas') { var n = parseInt(val('ct-cuotas'), 10); if (n > 0) setVal('ct-valor', _cuotaSugerida(_ctSaldo, n)); _ctValorManual = false; }
+  if (cual === 'valor')  _ctValorManual = true;
+  if (cual === 'primera') _ctPrimeraManual = true;
+  if ((cual === 'fecha' || cual === 'periodo') && !_ctPrimeraManual)
+    setVal('ct-primera', _addPeriodo(val('ct-fecha') || _iso(new Date()), val('ct-periodo'), 1));
+  _ctRender();
+}
+
+function _ctRender() {
+  var v = _ventaPorId(_ctId); if (!v) return;
+  var c = _ctLeer(), err = _ctFirmado ? '' : _ctValidar(c, _ctSaldo), plan = el('ct-plan');
+  if (_ctFirmado) { plan.innerHTML = ''; }
+  else if (err && c.cuotas >= 1) plan.innerHTML = '<span style="color:var(--danger)">⚠ ' + _esc(err) + '</span>';
+  else if (err) plan.innerHTML = '<span style="color:var(--muted)">Indique el número de cuotas para ver el plan.</span>';
+  else {
+    var p = planCuotas(Object.assign({}, c, { valorFinanciado: _ctSaldo })), ult = p[p.length - 1];
+    var iguales = (p.length === 1) || (ult.valor === c.valorCuota), previas = p.length - 1;
+    var detalle = p.length === 1 ? '1 cuota única de <strong>' + fmt(ult.valor) + '</strong>'
+                : iguales ? p.length + ' cuotas de <strong>' + fmt(c.valorCuota) + '</strong>'
+                : previas + (previas === 1 ? ' cuota' : ' cuotas') + ' de <strong>' + fmt(c.valorCuota) + '</strong> y una última de <strong>' + fmt(ult.valor) + '</strong>';
+    plan.innerHTML = '📆 ' + detalle + (p.length > 1 ? ' — del ' + _fechaCorta(p[0].fecha) + ' al ' + _fechaCorta(ult.fecha) : ' — vence el ' + _fechaCorta(p[0].fecha)) +
+      '. Total del saldo: <strong>' + fmt(_ctSaldo) + '</strong>.';
+  }
+  var bloqueado = _faltantesContrato(v).bloqueos.length > 0, guardable = !bloqueado && !err;
+  var b = '';
+  if (_ctFirmado) {
+    b += '<button class="btn btn-primary" onclick="imprimirContrato(_ctId)">🖨️ Reimprimir</button>' +
+         '<button class="btn" style="background:#6c757d;color:#fff" onclick="ctDesfirmar()">🔐 Quitar firma (administrador)</button>';
+  } else {
+    b += '<button class="btn btn-primary" ' + (guardable ? '' : 'disabled') + ' onclick="ctGuardar(true)">💾 ' + (_ctGuardado ? 'Guardar cambios e imprimir' : 'Guardar y generar contrato') + '</button>';
+    if (_ctGuardado) {
+      b += '<button class="btn" style="background:#0b6ea8;color:#fff" onclick="imprimirContrato(_ctId)">🖨️ Imprimir guardado</button>' +
+           '<span style="display:inline-flex;gap:6px;align-items:center"><input type="date" id="ct-fecha-firma" value="' + _iso(new Date()) + '" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px">' +
+           '<button class="btn btn-success" style="background:#1a7f4b;color:#fff" onclick="ctFirmar()">✅ Marcar como firmado</button></span>';
+    }
+  }
+  b += '<button class="btn" style="background:#e2e8f0" onclick="ctVerContrato()">👁️ Ver contrato</button><button class="btn btn-warning" onclick="cerrarContrato()">Cerrar</button>';
+  el('ct-botones').innerHTML = b;
+  if (el('ct-preview-caja').style.display !== 'none') ctVerContrato(true);
+}
+
+// Vista previa: lo guardado si esta firmado; si no, el borrador con lo que hay
+// en el formulario (conservando el numero si ya se habia guardado).
+function ctVerContrato(silencioso) {
+  var v = _ventaPorId(_ctId); if (!v) return;
+  var c = _ctGuardado && _ctFirmado ? _ctGuardado : (function(){
+    var x = _ctLeer(), err = _ctValidar(x, _ctSaldo); if (err) return null;
+    x.valorFinanciado = _ctSaldo; x.cuotaInicial = (parseFloat(v.total) || 0) - _ctSaldo; x.precioTotal = parseFloat(v.total) || 0;
+    if (_ctGuardado) { x.numero = _ctGuardado.numero; }
+    return x; })();
+  var caja = el('ct-preview-caja');
+  if (!c) {
+    caja.style.display = '';
+    el('ct-preview').innerHTML = '<span style="color:var(--muted)">Complete las condiciones del crédito (cuotas, fechas y valor) para ver el contrato.</span>';
+    return;
+  }
+  caja.style.display = '';
+  el('ct-preview').innerHTML = '<div class="ct-doc">' + _contratoHTML(v, c) + '</div>';
+  if (!silencioso) caja.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function ctGuardar(imprimir) {
+  var c = _ctLeer(), err = _ctValidar(c, _ctSaldo);
+  if (err) { showAlert('ct-alert', '⚠ ' + err, 'error'); return; }
+  var id = _ctId;
+  apiPost('/api/venta/contrato', { id: id, accion: 'guardar', contrato: c })
+    .then(function(r){ return recargarCache().then(function(){ return r; }); })
+    .then(function(r){
+      renderVentas();
+      abrirContrato(id);
+      showAlert('ct-alert', '✅ Contrato ' + r.contrato.numero + ' guardado.');
+      if (imprimir) imprimirContrato(id);
+    })
+    .catch(function(e){ showAlert('ct-alert', '❌ ' + e.message, 'error'); });
+}
+
+function ctFirmar() {
+  var v = _ventaPorId(_ctId), fecha = (el('ct-fecha-firma') && el('ct-fecha-firma').value) || _iso(new Date());
+  if (!v || !v.contrato) return;
+  if (!confirm('¿Confirma que el contrato ' + v.contrato.numero + ' ya fue firmado por todas las partes el ' + _fechaCorta(fecha) + '?\n\n' +
+               'Una vez marcado como firmado queda bloqueado: no se podrán cambiar sus condiciones sin la clave de administrador.')) return;
+  var id = _ctId;
+  apiPost('/api/venta/contrato', { id: id, accion: 'firmar', fecha: fecha })
+    .then(function(){ return recargarCache(); })
+    .then(function(){ renderVentas(); abrirContrato(id); showAlert('ct-alert', '✅ Contrato marcado como firmado.'); })
+    .catch(function(e){ showAlert('ct-alert', '❌ ' + e.message, 'error'); });
+}
+
+function ctDesfirmar() {
+  var id = _ctId;
+  var hacer = function() {
+    if (!confirm('¿Quitar la firma de este contrato?\n\nQuedará "pendiente de firma" y se podrán modificar sus condiciones.')) return;
+    apiPost('/api/venta/contrato', { id: id, accion: 'desfirmar', pin: adminPin })
+      .then(function(){ return recargarCache(); })
+      .then(function(){ renderVentas(); abrirContrato(id); showAlert('ct-alert', '✅ Firma retirada.'); _adminReloj(); })
+      .catch(function(e){
+        if (e.datos && e.datos.clave) { cerrarAdmin(); alert('🔒 ' + e.message); return; }
+        showAlert('ct-alert', '❌ ' + e.message, 'error');
+      });
+  };
+  if (adminActivo()) hacer(); else toggleAdmin(hacer);
+}
+
+// Imprime el contrato GUARDADO (el que tiene numero), con el plan de pagos.
+function imprimirContrato(id) {
+  var v = _ventaPorId(id);
+  if (!v || !v.contrato) { alert('Primero guarde el contrato.'); return; }
+  el('print-area').innerHTML = '<div class="ct-doc">' + _contratoHTML(v, v.contrato) + '</div>';
   window.print();
 }
 </script>

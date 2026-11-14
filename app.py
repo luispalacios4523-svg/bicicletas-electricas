@@ -427,10 +427,25 @@ def item_update():
         for i, x in enumerate(cur):
             if isinstance(x, dict) and _same_id(x.get('id'), item.get('id')):
                 holder['before'] = x
-                cur[i] = item
+                nuevo = dict(item)
+                if key == 'bec_ventas':
+                    # El contrato solo cambia por /api/venta/contrato. Aqui se
+                    # conserva el guardado: asi editar la venta no puede
+                    # borrarlo (la pagina rearma la venta campo por campo) ni
+                    # alterar uno firmado.
+                    if isinstance(x.get('contrato'), dict):
+                        nuevo['contrato'] = x['contrato']
+                    else:
+                        nuevo.pop('contrato', None)
+                holder['after'] = nuevo
+                cur[i] = nuevo
                 return cur, {'ok': True, 'count': len(cur)}
         # No estaba: lo agregamos en vez de perderlo.
-        cur.append(item)
+        nuevo = dict(item)
+        if key == 'bec_ventas':
+            nuevo.pop('contrato', None)
+        holder['after'] = nuevo
+        cur.append(nuevo)
         return cur, {'ok': True, 'count': len(cur), 'agregado': True}
 
     try:
@@ -438,7 +453,7 @@ def item_update():
     except Exception as e:
         return _cors(jsonify({'ok': False, 'error': str(e)})), 500
     audit('update', key, item.get('id'),
-          {'before': holder.get('before'), 'after': item})
+          {'before': holder.get('before'), 'after': holder.get('after', item)})
     return _cors(jsonify(res))
 
 
@@ -885,6 +900,186 @@ def producto_eliminar():
 
     audit('delete', 'bec_prod', item_id, {'before': viejo, 'por': 'administrador'})
     return _cors(jsonify({'ok': True, 'stock': res_inv.get('stock')}))
+
+
+# ==================================================================
+# CONTRATO DE VENTA A CREDITO
+# Las condiciones del credito (cuotas, fechas, mora) no existian en la venta:
+# se guardan en venta['contrato']. Las reglas viven aqui y no solo en la pagina:
+# solo hay contrato si queda saldo por financiar, la numeracion no se repite
+# aunque haya dos pestanas, y uno firmado no se modifica sin la clave de
+# administrador (para cambiarlo hay que quitar primero la firma).
+# ==================================================================
+_PERIODOS = ('semanal', 'quincenal', 'mensual')
+_CRED = ('Crédito', 'Credito')
+
+
+def _fecha_ok(s):
+    s = str(s or '')
+    if not _FECHA_RE.match(s):
+        return None
+    try:
+        datetime.strptime(s, '%Y-%m-%d')
+    except ValueError:
+        return None
+    return s
+
+
+def _pagado_inicial(venta):
+    """Lo recibido al vender (cuota inicial): suma de los pagos de la venta."""
+    pagos = venta.get('pagos')
+    if isinstance(pagos, list) and pagos:
+        return _num(sum(_numero(p.get('valor'), 0) for p in pagos if isinstance(p, dict)))
+    return _num(venta.get('abono') or 0)
+
+
+def _saldo_a_financiar(venta):
+    return _num(_num(venta.get('total') or 0) - _pagado_inicial(venta))
+
+
+def _siguiente_numero(ventas):
+    mayor = 0
+    for v in ventas:
+        c = v.get('contrato') if isinstance(v, dict) else None
+        m = re.match(r'^CV-(\d+)$', str((c or {}).get('numero') or ''))
+        if m:
+            mayor = max(mayor, int(m.group(1)))
+    return 'CV-%04d' % (mayor + 1)
+
+
+def _parsear_contrato(c, venta):
+    """Valida las condiciones y devuelve (contrato_limpio, None) o (None, error)."""
+    if not isinstance(c, dict):
+        return None, 'Faltan las condiciones del contrato.'
+    saldo = _saldo_a_financiar(venta)
+    if saldo <= 0:
+        return None, 'Esta venta no tiene saldo por financiar: no necesita contrato de credito.'
+
+    ciudad = str(c.get('ciudad') or '').strip()[:80]
+    if not ciudad:
+        return None, 'La ciudad del contrato es obligatoria.'
+    fecha = _fecha_ok(c.get('fecha'))
+    if not fecha:
+        return None, 'La fecha del contrato no es valida.'
+    primera = _fecha_ok(c.get('primeraCuota'))
+    if not primera:
+        return None, 'La fecha de la primera cuota no es valida.'
+    if primera < fecha:
+        return None, 'La primera cuota no puede ser anterior a la fecha del contrato.'
+    cuotas = _entero_positivo(c.get('cuotas'))
+    if cuotas is None or cuotas > 120:
+        return None, 'El numero de cuotas debe ser un entero entre 1 y 120.'
+    periodo = str(c.get('periodicidad') or '').lower()
+    if periodo not in _PERIODOS:
+        return None, 'La periodicidad debe ser semanal, quincenal o mensual.'
+
+    valor_cuota = _numero(c.get('valorCuota'))
+    if cuotas == 1:
+        valor_cuota = saldo
+    if valor_cuota <= 0:
+        return None, 'El valor de la cuota debe ser mayor que 0.'
+    if cuotas > 1 and valor_cuota * (cuotas - 1) >= saldo:
+        return None, ('Con %d cuotas de %s no queda saldo para la ultima: el valor de la cuota '
+                      'es demasiado alto.' % (cuotas, int(valor_cuota)))
+    if valor_cuota * cuotas < saldo:
+        return None, ('Con %d cuotas de %s no se alcanza a pagar el saldo: el valor de la cuota '
+                      'es demasiado bajo.' % (cuotas, int(valor_cuota)))
+
+    mora = c.get('moraPct')
+    if mora in (None, ''):
+        mora = None
+    else:
+        mora = _numero(mora)
+        if mora < 0 or mora > 10:
+            return None, 'El interes de mora mensual debe estar entre 0 y 10 %.'
+        mora = _num(mora)
+    mora_cuotas = _entero_positivo(c.get('moraCuotas') or 2)
+    if mora_cuotas is None or mora_cuotas > 12:
+        return None, 'Las cuotas en mora para vencimiento anticipado deben ser entre 1 y 12.'
+
+    codeudor = None
+    cd = c.get('codeudor')
+    if isinstance(cd, dict) and any(str(cd.get(k) or '').strip() for k in cd):
+        codeudor = {k: str(cd.get(k) or '').strip()[:120]
+                    for k in ('nombre', 'cedula', 'telefono', 'direccion')}
+        if not codeudor['nombre'] or not codeudor['cedula']:
+            return None, 'Del codeudor se necesitan al menos el nombre y la cedula.'
+
+    return {
+        'ciudad': ciudad, 'fecha': fecha, 'primeraCuota': primera,
+        'cuotas': cuotas, 'periodicidad': periodo, 'valorCuota': _num(valor_cuota),
+        'moraPct': mora, 'moraCuotas': mora_cuotas,
+        # Se fijan al guardar, calculados aqui con la venta: no se confia en la pagina.
+        'valorFinanciado': saldo, 'cuotaInicial': _pagado_inicial(venta),
+        'precioTotal': _num(venta.get('total') or 0), 'codeudor': codeudor,
+    }, None
+
+
+@app.route('/api/venta/contrato', methods=['POST'])
+def venta_contrato():
+    """accion: 'guardar' (crea o actualiza las condiciones; asigna el numero la
+    primera vez), 'firmar' (marca la fecha de firma) o 'desfirmar' (solo con la
+    clave de administrador)."""
+    d = request.json or {}
+    vid, accion = d.get('id'), (d.get('accion') or 'guardar')
+    if vid is None or accion not in ('guardar', 'firmar', 'desfirmar'):
+        return _err('peticion invalida')
+    if accion == 'desfirmar':
+        ok, err = _pin_ok(d.get('pin'))
+        if not ok:
+            return _err(err, 403, clave=True)
+
+    def fn(cur):
+        if not isinstance(cur, list):
+            cur = []
+        venta = next((x for x in cur if isinstance(x, dict) and _same_id(x.get('id'), vid)), None)
+        if venta is None:
+            return cur, {'ok': False, 'code': 404,
+                         'error': 'No se encontro esa venta. Recargue la pagina.'}
+        antes = copy.deepcopy(venta.get('contrato')) if isinstance(venta.get('contrato'), dict) else None
+
+        if accion == 'guardar':
+            if venta.get('tipo') not in _CRED:
+                return cur, {'ok': False, 'code': 400, 'error': 'Solo las ventas a credito tienen contrato.'}
+            if antes and antes.get('firmado'):
+                return cur, {'ok': False, 'code': 409, 'error':
+                    'El contrato ya esta firmado. Para modificarlo, un administrador debe quitar primero la firma.'}
+            limpio, err = _parsear_contrato(d.get('contrato'), venta)
+            if err:
+                return cur, {'ok': False, 'code': 400, 'error': err}
+            nuevo = dict(limpio)
+            nuevo['numero'] = (antes or {}).get('numero') or _siguiente_numero(cur)
+            nuevo['creado'] = (antes or {}).get('creado') or datetime.now().isoformat(timespec='seconds')
+            nuevo['firmado'] = None
+        elif accion == 'firmar':
+            if not antes:
+                return cur, {'ok': False, 'code': 400, 'error': 'Primero guarde el contrato.'}
+            if antes.get('firmado'):
+                return cur, {'ok': True, 'contrato': antes, 'sin_cambios': True}
+            fecha = _fecha_ok(d.get('fecha')) or datetime.now().strftime('%Y-%m-%d')
+            nuevo = dict(antes, firmado=fecha)
+        else:  # desfirmar
+            if not antes or not antes.get('firmado'):
+                return cur, {'ok': False, 'code': 400, 'error': 'Ese contrato no esta firmado.'}
+            nuevo = dict(antes, firmado=None)
+
+        venta['contrato'] = nuevo
+        resumen = {'nombre': venta.get('nombre'), 'fecha': venta.get('fecha'), 'total': venta.get('total')}
+        return cur, {'ok': True, 'contrato': nuevo,
+                     'auditoria': (dict(resumen, contrato=antes), dict(resumen, contrato=nuevo))}
+
+    try:
+        res = tx_mutate('bec_ventas', fn)
+    except Exception as e:
+        return _err(str(e), 500)
+    if not res.get('ok'):
+        return _err(res.get('error') or 'No se pudo guardar el contrato.', res.get('code', 400))
+    if res.get('auditoria'):
+        antes, despues = res['auditoria']
+        audit('update', 'bec_ventas', vid,
+              {'before': antes, 'after': despues, 'motivo': 'contrato: ' + accion})
+    return _cors(jsonify({'ok': True, 'contrato': res['contrato'],
+                          'sin_cambios': bool(res.get('sin_cambios'))}))
 
 
 @app.route('/api/audit')
