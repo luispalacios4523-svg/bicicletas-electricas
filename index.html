@@ -293,10 +293,10 @@
     <h2>📋 Historial de Entradas</h2>
     <div class="search-bar">
       <input type="text" id="hist-search" placeholder="Buscar..." oninput="renderHistorial()">
-      <button class="btn btn-sm" id="btn-admin" style="background:#6c757d;color:#fff" onclick="toggleAdmin()">🔐 Modo administrador</button>
-      <button class="btn btn-sm" id="btn-admin-clave" style="display:none;background:#6c757d;color:#fff" onclick="abrirCambioClave()">🔑 Cambiar clave</button>
+      <button class="btn btn-sm js-admin-btn" id="btn-admin" style="background:#6c757d;color:#fff" onclick="toggleAdmin()">🔐 Modo administrador</button>
+      <button class="btn btn-sm js-admin-clave" id="btn-admin-clave" style="display:none;background:#6c757d;color:#fff" onclick="abrirCambioClave()">🔑 Cambiar clave</button>
     </div>
-    <div id="adm-aviso" style="display:none;margin-bottom:10px;padding:8px 12px;background:#fff6dc;border:1px solid #f0d88a;border-radius:6px;font-size:13px;color:#7a5b00">
+    <div id="adm-aviso" class="js-admin-aviso" style="display:none;margin-bottom:10px;padding:8px 12px;background:#fff6dc;border:1px solid #f0d88a;border-radius:6px;font-size:13px;color:#7a5b00">
       🔓 <strong>Modo administrador activo.</strong> Aparecen ✏️ editar y ✕ eliminar en cada entrada. Se cierra solo tras 10 min sin usarlo o al salir de esta pantalla.
     </div>
     <div class="table-wrap"><table>
@@ -506,6 +506,11 @@
     <div class="search-bar">
       <input type="text" id="gastos-search" placeholder="Buscar..." oninput="renderGastos()">
       <input type="month" id="gastos-mes" onchange="renderGastos()">
+      <button class="btn btn-sm js-admin-btn" style="background:#6c757d;color:#fff" onclick="toggleAdmin()">🔐 Modo administrador</button>
+      <button class="btn btn-sm js-admin-clave" style="display:none;background:#6c757d;color:#fff" onclick="abrirCambioClave()">🔑 Cambiar clave</button>
+    </div>
+    <div class="js-admin-aviso" style="display:none;margin-bottom:10px;padding:8px 12px;background:#fff6dc;border:1px solid #f0d88a;border-radius:6px;font-size:13px;color:#7a5b00">
+      🔓 <strong>Modo administrador activo.</strong> Aparece ✏️ en cada gasto. Se cierra solo tras 10 min sin usarlo o al salir de esta pantalla.
     </div>
     <div class="table-wrap"><table>
       <thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Forma Pago</th><th>Comprobante</th><th>Valor</th><th></th></tr></thead>
@@ -741,6 +746,31 @@
     <div class="btn-row">
       <button class="btn btn-primary" id="adm-btn" onclick="confirmarAdmin()">Entrar</button>
       <button class="btn btn-warning" onclick="cerrarModalAdmin()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Editar gasto (solo administrador) -->
+<div class="modal-overlay" id="modal-editar-gasto">
+  <div class="modal" style="max-width:560px">
+    <button class="modal-close" onclick="cerrarEditorGasto()">&#x2715;</button>
+    <h3>✏️ Editar gasto</h3>
+    <div style="margin-bottom:12px;padding:8px 10px;background:#fff6dc;border:1px solid #f0d88a;border-radius:6px;font-size:12px;color:#7a5b00">
+      🔓 Modo administrador. Un gasto entra en la caja y en el flujo por medio de pago: al cambiar el valor o la forma de pago, esas cuentas se recalculan.
+    </div>
+    <div class="form-grid" style="grid-template-columns:1fr 1fr">
+      <div class="form-group"><label>Fecha *</label><input type="date" id="eg-fecha"></div>
+      <div class="form-group"><label>Valor ($) *</label><input type="number" id="eg-valor" min="0" oninput="egResumen()"></div>
+      <div class="form-group" style="grid-column:1/-1"><label>Concepto *</label><input type="text" id="eg-concepto"></div>
+      <div class="form-group"><label>Categoría</label><select id="eg-categoria"></select></div>
+      <div class="form-group"><label>Forma de pago *</label><select id="eg-formapago" onchange="egResumen()"></select></div>
+      <div class="form-group" style="grid-column:1/-1"><label>Comprobante</label><input type="text" id="eg-comprobante" placeholder="N° recibo o referencia"></div>
+    </div>
+    <div id="eg-efecto" style="margin-top:10px;font-size:12px;color:#7a5b00"></div>
+    <div id="eg-alert" style="margin-top:10px"></div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="eg-btn" onclick="guardarEdicionGasto()">💾 Guardar cambios</button>
+      <button class="btn btn-warning" onclick="cerrarEditorGasto()">Cancelar</button>
     </div>
   </div>
 </div>
@@ -1045,7 +1075,7 @@ function showAlert(id, msg, type) {
 
 function showPage(page, tab) {
   // El modo administrador no sobrevive a un cambio de pantalla.
-  if (page !== 'productos' && typeof adminActivo === 'function' && adminActivo()) cerrarAdmin();
+  if (typeof adminActivo === 'function' && adminActivo() && page !== _adminPagina) cerrarAdmin();
   document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
   document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
   el('page-'+page).classList.add('active');
@@ -1319,29 +1349,45 @@ function renderHistorial() {
 // Aqui solo se conserva en memoria mientras el modo esta activo: no queda en
 // el navegador y se pierde al recargar la pagina.
 // ================================================================
-var adminPin = null, _adminTimer = null, _admModo = 'entrar';
+var adminPin = null, _adminTimer = null, _admModo = 'entrar', _adminPagina = null;
 var ADMIN_MINUTOS = 10;
 
 function adminActivo() { return adminPin !== null; }
+
+// El modo administrador pertenece a UNA pantalla: se activa en ella y se cierra
+// al salir. Cada pantalla con acciones de administrador tiene su propio aviso.
+function _paginaActual() {
+  var p = document.querySelector('.page.active');
+  return p ? p.id.replace(/^page-/, '') : null;
+}
+var _ALERTA_PAGINA = { productos: 'prod-alert', gastos: 'gasto-alert' };
+function _avisoAdmin(msg, tipo) {
+  var id = _ALERTA_PAGINA[_adminPagina || _paginaActual()];
+  if (id && el(id)) showAlert(id, msg, tipo);
+}
 
 function _adminReloj() {
   clearTimeout(_adminTimer);
   if (adminPin !== null) _adminTimer = setTimeout(function(){ cerrarAdmin(true); }, ADMIN_MINUTOS*60*1000);
 }
 
+// Hay un boton y un aviso por pantalla (clases js-admin-*): se actualizan todos.
 function actualizarAdminUI() {
   var on = adminActivo();
-  el('btn-admin').textContent = on ? '🔓 Cerrar modo administrador' : '🔐 Modo administrador';
-  el('btn-admin').style.background = on ? '#b45309' : '#6c757d';
-  el('btn-admin-clave').style.display = on ? '' : 'none';
-  el('adm-aviso').style.display = on ? '' : 'none';
+  [].forEach.call(document.querySelectorAll('.js-admin-btn'), function(b){
+    b.textContent = on ? '🔓 Cerrar modo administrador' : '🔐 Modo administrador';
+    b.style.background = on ? '#b45309' : '#6c757d';
+  });
+  [].forEach.call(document.querySelectorAll('.js-admin-clave'), function(b){ b.style.display = on ? '' : 'none'; });
+  [].forEach.call(document.querySelectorAll('.js-admin-aviso'), function(b){ b.style.display = on ? '' : 'none'; });
 }
 
 function cerrarAdmin(porInactividad) {
-  adminPin = null; clearTimeout(_adminTimer);
-  cerrarEditorProducto(); cerrarModalAdmin();
-  actualizarAdminUI(); renderHistorial();
-  if (porInactividad) showAlert('prod-alert', '🔒 Modo administrador cerrado por inactividad.', 'error');
+  var pagina = _adminPagina;
+  adminPin = null; _adminPagina = null; clearTimeout(_adminTimer);
+  cerrarEditorProducto(); cerrarEditorGasto(); cerrarModalAdmin();
+  actualizarAdminUI(); renderHistorial(); renderGastos();
+  if (porInactividad && _ALERTA_PAGINA[pagina]) showAlert(_ALERTA_PAGINA[pagina], '🔒 Modo administrador cerrado por inactividad.', 'error');
 }
 
 // Si se pasa una funcion, se ejecuta justo despues de entrar con la clave
@@ -1354,7 +1400,7 @@ function toggleAdmin(despues) {
   el('adm-alert').innerHTML = '';
   fetch('/api/admin/estado').then(function(r){ return r.json(); })
     .then(function(j){ _abrirModalAdmin(j.configurado ? 'entrar' : 'crear'); })
-    .catch(function(e){ errorGuardado('prod-alert', e); });
+    .catch(function(e){ errorGuardado(_ALERTA_PAGINA[_paginaActual()] || null, e); });
 }
 
 function abrirCambioClave() { el('adm-alert').innerHTML = ''; _abrirModalAdmin('cambiar'); }
@@ -1400,8 +1446,9 @@ function confirmarAdmin() {
       var eraCambio = (_admModo === 'cambiar');
       var pendiente = _admDespues; _admDespues = null;
       adminPin = pin; _adminReloj();
-      cerrarModalAdmin(); actualizarAdminUI(); renderHistorial();
-      showAlert('prod-alert', eraCambio ? '✅ Clave cambiada.' : '🔓 Modo administrador activo.');
+      _adminPagina = _adminPagina || _paginaActual();     // el modo queda atado a esta pantalla
+      cerrarModalAdmin(); actualizarAdminUI(); renderHistorial(); renderGastos();
+      _avisoAdmin(eraCambio ? '✅ Clave cambiada.' : '🔓 Modo administrador activo.');
       if (pendiente) pendiente();
     })
     .catch(function(e){ err(e.message); })
@@ -2757,9 +2804,86 @@ function renderGastos() {
     h+='<td>'+(g.formapago||'-')+'</td>';
     h+='<td>'+(g.comprobante||'-')+'</td>';
     h+='<td>'+fmt(g.valor)+'</td>';
-    h+='<td><button class="btn btn-danger btn-sm" onclick="eliminarGasto('+g.id+')">✕</button></td></tr>';
+    h+='<td style="white-space:nowrap">';
+    // Editar solo existe en modo administrador (y ademas el servidor exige la
+    // clave en cada edicion).
+    if (adminActivo()) h+='<button class="btn btn-warning btn-sm" onclick="abrirEditorGasto('+g.id+')" title="Editar gasto" style="margin-right:4px">✏️</button>';
+    h+='<button class="btn btn-danger btn-sm" onclick="eliminarGasto('+g.id+')">✕</button></td></tr>';
   });
   el('gastos-body').innerHTML=h; el('gastos-total').textContent=fmt(total);
+}
+
+// ---- Editar un gasto (solo administrador) ----
+var _egOriginal = null;
+var _egCategorias = ['Arriendo','Servicios públicos','Transporte','Publicidad','Nómina','Mantenimiento','Impuestos','Otro'];
+
+function abrirEditorGasto(id) {
+  if (!adminActivo()) return;
+  var g = null; DB.get(KEYS.gastos).forEach(function(x){ if (String(x.id) === String(id)) g = x; });
+  if (!g) { showAlert('gasto-alert', '⚠ No se encontró ese gasto. Recargue la página.', 'error'); return; }
+  _egOriginal = g;
+  setVal('eg-fecha', g.fecha||''); setVal('eg-concepto', g.concepto||''); setVal('eg-valor', g.valor);
+  setVal('eg-comprobante', g.comprobante||'');
+  // Una categoria o forma de pago escrita distinto en el gasto se conserva como opcion.
+  var cats = _egCategorias.slice();
+  if (g.categoria && cats.indexOf(g.categoria) < 0) cats.unshift(g.categoria);
+  // Los gastos viejos no tienen categoria. Se deja "sin categoria" seleccionada:
+  // si no, la primera de la lista (Arriendo) se les asignaria al guardar.
+  el('eg-categoria').innerHTML = (g.categoria ? '' : '<option value="">— sin categoría —</option>') +
+    cats.map(function(c){ return '<option>'+_esc(c)+'</option>'; }).join('');
+  el('eg-categoria').value = g.categoria || '';
+  var mets = getLista(KEYS.metodos, DEF_METODOS).slice();
+  if (g.formapago && mets.indexOf(g.formapago) < 0) mets.unshift(g.formapago);
+  // Gastos viejos sin forma de pago: no se elige una por el usuario, debe escogerla.
+  var opciones = mets.map(function(m){ return '<option>'+_esc(m)+'</option>'; }).join('');
+  el('eg-formapago').innerHTML = (g.formapago ? '' : '<option value="">— elija —</option>') + opciones;
+  el('eg-formapago').value = g.formapago || '';
+  egResumen();
+  el('eg-alert').innerHTML = '';
+  el('modal-editar-gasto').classList.add('open');
+  _adminReloj();
+}
+
+function cerrarEditorGasto() {
+  el('modal-editar-gasto').classList.remove('open');
+  _egOriginal = null;
+}
+
+// Avisa, antes de guardar, si el cambio mueve la caja de Efectivo.
+function egResumen() {
+  var g = _egOriginal, box = el('eg-efecto');
+  if (!g) { box.textContent = ''; return; }
+  var esEf = function(f){ return String(f||'').trim().toLowerCase() === 'efectivo'; };
+  var antes = esEf(g.formapago) ? (parseFloat(g.valor)||0) : 0;
+  var despues = esEf(val('eg-formapago')) ? (parseFloat(val('eg-valor'))||0) : 0;
+  var d = antes - despues;      // lo que sale de efectivo: si ahora sale menos, la caja sube
+  box.textContent = d === 0 ? '' : '💵 Caja de Efectivo: ' + (d > 0 ? 'sube ' : 'baja ') + fmt(Math.abs(d)) + '.';
+}
+
+function guardarEdicionGasto() {
+  if (!adminActivo()) { showAlert('eg-alert', '⚠ El modo administrador se cerró.', 'error'); return; }
+  var g = _egOriginal; if (!g) return;
+  var f = { id: g.id, fecha: val('eg-fecha'), concepto: val('eg-concepto').trim(), categoria: val('eg-categoria'),
+            valor: parseFloat(val('eg-valor')), formapago: val('eg-formapago'), comprobante: val('eg-comprobante').trim() };
+  // La categoria solo es obligatoria si el gasto ya tenia una (los viejos no).
+  if (!f.fecha || !f.concepto || !(f.valor > 0) || !f.formapago || (!f.categoria && g.categoria)) {
+    showAlert('eg-alert', '⚠ Complete los campos obligatorios (*): el valor debe ser mayor que 0 y la forma de pago no puede quedar vacía.', 'error'); return;
+  }
+  var btn = el('eg-btn'); btn.disabled = true; btn.textContent = 'Guardando...';
+  apiPost('/api/gasto/editar', { pin: adminPin, item: f })
+    .then(function(r){ return recargarCache().then(function(){ return r; }); })
+    .then(function(r){
+      cerrarEditorGasto();
+      refrescarVistas();       // incluye Reportes: la caja y el efectivo se recalculan
+      showAlert('gasto-alert', r.sin_cambios ? 'ℹ️ No había cambios que guardar.' : '✅ Gasto actualizado y confirmado por el servidor.');
+      _adminReloj();
+    })
+    .catch(function(e){
+      // Clave rechazada: se cierra el modo administrador en vez de seguir como si nada.
+      if (e.datos && e.datos.clave) { cerrarAdmin(); alert('🔒 ' + e.message); return; }
+      showAlert('eg-alert', '❌ ' + e.message, 'error');
+    })
+    .then(function(){ btn.disabled = false; btn.textContent = '💾 Guardar cambios'; });
 }
 
 function eliminarGasto(id) {

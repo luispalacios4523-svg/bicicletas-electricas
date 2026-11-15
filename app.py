@@ -419,6 +419,8 @@ def item_update():
         return _cors(jsonify({'ok': False, 'error': 'peticion invalida'})), 400
     if key == 'bec_prod':
         return _err('Editar entradas de productos requiere la clave de administrador.', 403)
+    if key == 'bec_gastos':
+        return _err('Editar gastos requiere la clave de administrador.', 403)
 
     holder = {}
 
@@ -764,6 +766,75 @@ def producto_editar():
                                   'fecha': v.get('fecha'), 'costoUnit': v.get('costoUnit')})
     return _cors(jsonify({'ok': True, 'item': nuevo, 'stock': res_inv.get('stock'),
                           'ventas_afectadas': afectadas}))
+
+
+@app.route('/api/gasto/editar', methods=['POST'])
+def gasto_editar():
+    """Edita un GASTO. Solo administrador (clave en cada llamada).
+
+    Un gasto alimenta la caja y el flujo por medio de pago, asi que corregirlo
+    cambia esas cuentas; por eso exige la clave y queda en la bitacora con el
+    antes y el despues. No mueve inventario."""
+    d = request.json or {}
+    ok, err = _pin_ok(d.get('pin'))
+    if not ok:
+        return _err(err, 403, clave=True)
+    item = d.get('item')
+    if not isinstance(item, dict) or item.get('id') is None:
+        return _err('peticion invalida')
+
+    def txt(k, n):
+        return str(item.get(k) or '').strip()[:n]
+
+    fecha = _fecha_ok(item.get('fecha'))
+    concepto, categoria, formapago = txt('concepto', 200), txt('categoria', 60), txt('formapago', 60)
+    valor = _numero(item.get('valor'))
+    if not fecha:
+        return _err('La fecha no es valida.')
+    if not concepto:
+        return _err('El concepto es obligatorio.')
+    if valor <= 0:
+        return _err('El valor debe ser mayor que 0.')
+    if not formapago:
+        return _err('La forma de pago es obligatoria.')
+
+    holder = {}
+
+    def fn(cur):
+        if not isinstance(cur, list):
+            cur = []
+        for i, x in enumerate(cur):
+            if isinstance(x, dict) and _same_id(x.get('id'), item['id']):
+                viejo = copy.deepcopy(x)
+                # Los gastos viejos no tienen categoria ni comprobante: son
+                # opcionales ahi. No se les asigna una categoria por defecto, ni
+                # se les agregan campos vacios solo por abrirlos y guardar.
+                if not categoria and viejo.get('categoria'):
+                    return cur, {'ok': False, 'code': 400,
+                                 'error': 'La categoria es obligatoria.'}
+                nuevo = dict(x)     # conserva campos que el formulario no maneja
+                nuevo.update({'fecha': fecha, 'concepto': concepto,
+                              'valor': _num(valor), 'formapago': formapago})
+                for campo, v in (('categoria', categoria), ('comprobante', txt('comprobante', 120))):
+                    if v or campo in viejo:
+                        nuevo[campo] = v
+                holder['viejo'], holder['nuevo'] = viejo, nuevo
+                if nuevo != viejo:
+                    cur[i] = nuevo
+                return cur, {'ok': True, 'sin_cambios': nuevo == viejo}
+        return cur, {'ok': False, 'code': 404,
+                     'error': 'No se encontro ese gasto. Recargue la pagina e intente de nuevo.'}
+
+    try:
+        res = tx_mutate('bec_gastos', fn)
+    except Exception as e:
+        return _err(str(e), 500)
+    if not res.get('ok'):
+        return _err(res.get('error') or 'No se pudo guardar el gasto.', res.get('code', 500))
+    if not res.get('sin_cambios'):
+        audit('update', 'bec_gastos', holder['nuevo'].get('id'),
+              {'before': holder['viejo'], 'after': holder['nuevo'], 'por': 'administrador'})
+    return _cors(jsonify({'ok': True, 'item': holder['nuevo'], 'sin_cambios': bool(res.get('sin_cambios'))}))
 
 
 @app.route('/api/ventas/costo', methods=['POST'])
