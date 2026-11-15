@@ -510,7 +510,7 @@
       <button class="btn btn-sm js-admin-clave" style="display:none;background:#6c757d;color:#fff" onclick="abrirCambioClave()">🔑 Cambiar clave</button>
     </div>
     <div class="js-admin-aviso" style="display:none;margin-bottom:10px;padding:8px 12px;background:#fff6dc;border:1px solid #f0d88a;border-radius:6px;font-size:13px;color:#7a5b00">
-      🔓 <strong>Modo administrador activo.</strong> Aparece ✏️ en cada gasto. Se cierra solo tras 10 min sin usarlo o al salir de esta pantalla.
+      🔓 <strong>Modo administrador activo.</strong> Aparecen ✏️ editar y ✕ eliminar en cada gasto. Se cierra solo tras 10 min sin usarlo o al salir de esta pantalla.
     </div>
     <div class="table-wrap"><table>
       <thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Forma Pago</th><th>Comprobante</th><th>Valor</th><th></th></tr></thead>
@@ -1069,8 +1069,13 @@ function today()     { return new Date().toISOString().split('T')[0]; }
 
 function showAlert(id, msg, type) {
   type = type || 'success';
-  el(id).innerHTML = '<div class="alert alert-'+type+'">'+msg+'</div>';
-  setTimeout(function(){ if(el(id)) el(id).innerHTML=''; }, 5000);
+  var box = el(id);
+  // Cada aviso reinicia el reloj de su caja: antes el temporizador de un aviso
+  // anterior borraba el nuevo antes de tiempo (un "guardado" seguido de otro
+  // mensaje desaparecia casi de inmediato).
+  clearTimeout(box._t);
+  box.innerHTML = '<div class="alert alert-'+type+'">'+msg+'</div>';
+  box._t = setTimeout(function(){ box.innerHTML = ''; }, 5000);
 }
 
 function showPage(page, tab) {
@@ -2805,10 +2810,13 @@ function renderGastos() {
     h+='<td>'+(g.comprobante||'-')+'</td>';
     h+='<td>'+fmt(g.valor)+'</td>';
     h+='<td style="white-space:nowrap">';
-    // Editar solo existe en modo administrador (y ademas el servidor exige la
-    // clave en cada edicion).
-    if (adminActivo()) h+='<button class="btn btn-warning btn-sm" onclick="abrirEditorGasto('+g.id+')" title="Editar gasto" style="margin-right:4px">✏️</button>';
-    h+='<button class="btn btn-danger btn-sm" onclick="eliminarGasto('+g.id+')">✕</button></td></tr>';
+    // Editar y eliminar solo existen en modo administrador (y ademas el
+    // servidor exige la clave en cada una de las dos operaciones).
+    if (adminActivo()) {
+      h+='<button class="btn btn-warning btn-sm" onclick="abrirEditorGasto('+g.id+')" title="Editar gasto" style="margin-right:4px">✏️</button>';
+      h+='<button class="btn btn-danger btn-sm" onclick="eliminarGasto('+g.id+')" title="Eliminar gasto">✕</button>';
+    }
+    h+='</td></tr>';
   });
   el('gastos-body').innerHTML=h; el('gastos-total').textContent=fmt(total);
 }
@@ -2887,11 +2895,24 @@ function guardarEdicionGasto() {
 }
 
 function eliminarGasto(id) {
-  if (!confirm('¿Eliminar este gasto?\n\nQuedará una copia en la Bitácora.')) return;
-  itemDelete(KEYS.gastos, id)
+  if (!adminActivo()) { showAlert('gasto-alert', '🔒 Eliminar gastos requiere el modo administrador.', 'error'); return; }
+  var g = null; DB.get(KEYS.gastos).forEach(function(x){ if (String(x.id) === String(id)) g = x; });
+  if (!g) return;
+  var enEfectivo = String(g.formapago||'').trim().toLowerCase() === 'efectivo';
+  if (!confirm('¿Eliminar este gasto?\n\n' + g.concepto + '\nValor: ' + fmt(g.valor) + '\nForma de pago: ' + (g.formapago||'-') + '\nFecha: ' + g.fecha +
+               (enEfectivo ? '\n\n💵 La caja de Efectivo subirá ' + fmt(g.valor) + '.' : '') +
+               '\n\nQuedará una copia en la Bitácora para recuperarlo.')) return;
+  apiPost('/api/gasto/eliminar', { pin: adminPin, id: g.id })
     .then(function(){ return recargarCache(); })
-    .then(function(){ renderGastos(); })
-    .catch(function(e){ errorGuardado(null, e); });
+    .then(function(){
+      refrescarVistas();       // incluye Reportes: la caja y el efectivo se recalculan
+      showAlert('gasto-alert', '✅ Gasto eliminado. Puede recuperarlo desde la Bitácora.');
+      _adminReloj();
+    })
+    .catch(function(e){
+      if (e.datos && e.datos.clave) { cerrarAdmin(); alert('🔒 ' + e.message); return; }
+      showAlert('gasto-alert', '❌ ' + e.message, 'error');
+    });
 }
 
 // ================================================================

@@ -467,6 +467,8 @@ def item_delete():
         return _cors(jsonify({'ok': False, 'error': 'peticion invalida'})), 400
     if key == 'bec_prod':
         return _err('Eliminar entradas de productos requiere la clave de administrador.', 403)
+    if key == 'bec_gastos':
+        return _err('Eliminar gastos requiere la clave de administrador.', 403)
 
     holder = {}
 
@@ -835,6 +837,43 @@ def gasto_editar():
         audit('update', 'bec_gastos', holder['nuevo'].get('id'),
               {'before': holder['viejo'], 'after': holder['nuevo'], 'por': 'administrador'})
     return _cors(jsonify({'ok': True, 'item': holder['nuevo'], 'sin_cambios': bool(res.get('sin_cambios'))}))
+
+
+@app.route('/api/gasto/eliminar', methods=['POST'])
+def gasto_eliminar():
+    """Elimina un GASTO. Solo administrador (clave en cada llamada).
+
+    Quita un gasto de la caja y del flujo por medio de pago, asi que exige la
+    clave. Queda en la bitacora con el gasto completo para poder recuperarlo."""
+    d = request.json or {}
+    ok, err = _pin_ok(d.get('pin'))
+    if not ok:
+        return _err(err, 403, clave=True)
+    gid = d.get('id')
+    if gid is None:
+        return _err('peticion invalida')
+
+    holder = {}
+
+    def fn(cur):
+        if not isinstance(cur, list):
+            cur = []
+        keep = []
+        for x in cur:
+            if isinstance(x, dict) and _same_id(x.get('id'), gid):
+                holder['viejo'] = copy.deepcopy(x)
+            else:
+                keep.append(x)
+        return keep, {'ok': 'viejo' in holder}
+
+    try:
+        res = tx_mutate('bec_gastos', fn)
+    except Exception as e:
+        return _err(str(e), 500)
+    if not res.get('ok'):
+        return _err('No se encontro ese gasto. Recargue la pagina e intente de nuevo.', 404)
+    audit('delete', 'bec_gastos', gid, {'before': holder['viejo'], 'por': 'administrador'})
+    return _cors(jsonify({'ok': True}))
 
 
 @app.route('/api/ventas/costo', methods=['POST'])
