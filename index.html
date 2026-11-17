@@ -3855,7 +3855,7 @@ function _contratoHTML(v, c) {
     (repr ? 'representada legalmente por ' : 'establecimiento de comercio de propiedad de ') + B(vNom) +
     ', mayor de edad, identificado(a) con cédula de ciudadanía número ' + B(vDoc) +
     ', quien en adelante se denominará <strong>EL VENDEDOR</strong>; y ' +
-    B(v.nombre) + ', mayor de edad, identificado(a) con cédula de ciudadanía número ' + B(v.cedula) +
+    B(v.nombre) + ', mayor de edad, identificado(a) con cédula de ciudadanía número ' + B(_cedulaValida(v.cedula) ? v.cedula : '') +
     ', domiciliado(a) en ' + B([v.direccion, v.ciudad].filter(Boolean).join(', ')) +
     (v.telefono ? ', teléfono ' + e(v.telefono) : '') + (v.correo ? ', correo ' + e(v.correo) : '') +
     ', quien en adelante se denominará <strong>EL COMPRADOR</strong>' +
@@ -3926,7 +3926,7 @@ function _contratoHTML(v, c) {
     '<p>Para constancia, se firma en dos (2) ejemplares del mismo tenor, uno para cada parte, en ' + e(ciudad || '__________') + ', el ' + e(_fechaLarga(c.fecha)) + '.</p>' +
     '<div class="ct-firmas">' +
       firma('EL VENDEDOR', vNom, vDoc, e(emp) + (nit ? ' — NIT ' + e(nit) : '')) +
-      firma('EL COMPRADOR', v.nombre, v.cedula, '') +
+      firma('EL COMPRADOR', v.nombre, _cedulaValida(v.cedula) ? v.cedula : '', '') +
       (cd ? firma('EL CODEUDOR', cd.nombre, cd.cedula, '') : '') +
     '</div>' +
     '<h2>PLAN DE PAGOS — Contrato N° ' + (c.numero ? e(c.numero) : '________') + '</h2>' +
@@ -3940,12 +3940,17 @@ var _ctId = null, _ctSaldo = 0, _ctValorManual = false, _ctPrimeraManual = false
 
 function _ventaPorId(id) { var r = null; DB.get(KEYS.ventas).forEach(function(x){ if (String(x.id) === String(id)) r = x; }); return r; }
 
+// Hay ventas con la cedula en "0" o incompleta: se trata como faltante (linea en
+// blanco en el contrato) en vez de imprimir un numero que no es una cedula.
+function _cedulaValida(c) { return String(c || '').replace(/\D/g, '').length >= 5; }
+
 // Lo que impide generar el contrato (bloqueos) y lo que solo conviene completar (avisos).
 function _faltantesContrato(v) {
+  // Nada bloquea: lo que falte sale como una linea en blanco para llenar a mano.
   var b = [], a = [];
-  if (String(v.cedula || '').replace(/\D/g, '').length < 5) b.push('Cédula del comprador (pulse ✏️ Editar en la venta)');
-  if (!_cfgTxt('bec_vend_nombre')) b.push('Nombre de quien vende (Reportes → Identidad del Almacén)');
-  if (!_cfgTxt('bec_vend_doc'))    b.push('Cédula de quien vende (Reportes → Identidad del Almacén)');
+  if (!_cedulaValida(v.cedula)) a.push('cédula del comprador (saldrá en blanco; o complétela con ✏️ Editar en la venta)');
+  if (!_cfgTxt('bec_vend_nombre')) a.push('nombre de quien vende (saldrá en blanco; se configura en Reportes → Identidad del Almacén)');
+  if (!_cfgTxt('bec_vend_doc'))    a.push('cédula de quien vende (saldrá en blanco; se configura en Reportes → Identidad del Almacén)');
   if (!String(v.direccion || '').trim()) a.push('dirección del comprador');
   if (!String(v.telefono || '').trim())  a.push('teléfono del comprador');
   if (!v.serChasis || !v.serMotor || !v.serBateria) a.push('seriales del vehículo (saldrán en blanco para llenar a mano)');
